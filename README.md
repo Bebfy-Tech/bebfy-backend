@@ -13,11 +13,8 @@ npm install
 # Atualizar e sincronizar a estrutura do banco PostgreSQL com o Prisma
 npx prisma db push
 
----
-
-### 🚀 2. Iniciar o Servidor
-
-```bash
+ 🚀 2. Iniciar o Servidor
+bash
 # Inicia a aplicação NestJS em modo de desenvolvimento na porta 3000
 npm run start:dev
 
