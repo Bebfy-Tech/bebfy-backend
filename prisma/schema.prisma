@@ -1,0 +1,368 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------
+// 1. USUÁRIOS, FUNCIONÁRIOS E PERMISSÕES
+// ----------------------------------------------------
+
+enum Cargo {
+  ADMINISTRADOR
+  FUNCIONARIO
+  PROPRIETARIO
+  GERENTE
+  OPERADOR_CAIXA
+  ESTOQUISTA
+  ENTREGADOR
+}
+
+model Funcionario {
+  id              String      @id @default(uuid())
+  nome            String
+  cpf             String      @unique
+  telefone        String?
+  cargo           Cargo
+  descontoMaximo  Decimal     @default(0.00)
+  ativo           Boolean     @default(true)
+  criadoEm        DateTime    @default(now())
+  atualizadoEm    DateTime    @updatedAt
+
+  usuario         Usuario?
+  vendas          Venda[]
+  caixasFechados  Caixa[]     @relation("OperadorCaixa")
+}
+
+model Usuario {
+  id             String      @id @default(uuid())
+  email          String      @unique
+  senha          String
+  funcionarioId  String      @unique
+  funcionario    Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
+  permissoes     String[]
+  criadoEm       DateTime    @default(now())
+  atualizadoEm   DateTime    @updatedAt
+}
+
+// ----------------------------------------------------
+// 2. PARÂMETROS GLOBAIS DA LOJA
+// ----------------------------------------------------
+
+model ConfigGlobal {
+  id                     String   @id @default(uuid())
+  nomeEmpresa            String
+  cnpj                   String?
+  telefone               String?
+  endereco               String?
+  obrigarCpfClienteVenda Boolean  @default(false)
+  bloquearFiadoAtrasado Boolean  @default(true)
+  atualizadoEm           DateTime @updatedAt
+}
+
+// ----------------------------------------------------
+// 3. PRODUTOS, LOTES, VASILHAMES E INFLAÇÃO DE CUSTO
+// ----------------------------------------------------
+
+model Categoria {
+  id        String    @id @default(uuid())
+  nome      String    @unique
+  produtos  Produto[]
+}
+
+model Produto {
+  id                 String       @id @default(uuid())
+  nome               String
+  codigoBarras       String?      @unique
+  ml                 Int?
+  unidadeMedida      String       @default("UN")
+  fardoQuantidade    Int?
+  precoCusto         Decimal      @default(0.00)
+  precoVendaVarejo   Decimal      @default(0.00)
+  precoVendaAtacado  Decimal?
+  qtdAtacadoMinima   Int?
+  estoqueAtual       Int          @default(0)
+  estoqueMinimo      Int          @default(0)
+  retornavel         Boolean      @default(false)
+  categoriaId        String?
+  categoria          Categoria?   @relation(fields: [categoriaId], references: [id])
+  criadoEm           DateTime     @default(now())
+  atualizadoEm       DateTime     @updatedAt
+
+  lotes              LoteProduto[]
+  historicoCustos    HistoricoCusto[]
+  itensVenda         ItemVenda[]
+  itensNotaFiscal    ItemNotaFiscal[]
+  movimentacoes      MovimentacaoEstoque[]
+}
+
+model LoteProduto {
+  id             String    @id @default(uuid())
+  produtoId      String
+  produto        Produto   @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  numeroLote     String?
+  quantidade     Int
+  dataVencimento DateTime?
+  criadoEm       DateTime  @default(now())
+}
+
+model HistoricoCusto {
+  id           String   @id @default(uuid())
+  produtoId    String
+  produto      Produto  @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  custoAnterior Decimal
+  custoNovo    Decimal
+  dataAlteracao DateTime @default(now())
+}
+
+// ----------------------------------------------------
+// 4. FORNECEDORES E IMPORTAÇÃO DE XML (NF-e)
+// ----------------------------------------------------
+
+model Fornecedor {
+  id          String       @id @default(uuid())
+  cnpj        String       @unique
+  razaoSocial String
+  nomeFantasia String?
+  telefone    String?
+  email       String?
+  criadoEm    DateTime     @default(now())
+
+  notasFiscais NotaFiscal[]
+}
+
+model NotaFiscal {
+  id             String           @id @default(uuid())
+  chaveAcesso    String           @unique
+  numeroNota     String
+  fornecedorId   String
+  fornecedor     Fornecedor       @relation(fields: [fornecedorId], references: [id])
+  valorTotal     Decimal
+  dataEmissao    DateTime
+  criadoEm       DateTime         @default(now())
+
+  itens          ItemNotaFiscal[]
+  contasAPagar   ContaPagar[]
+}
+
+model ItemNotaFiscal {
+  id           String     @id @default(uuid())
+  notaFiscalId String
+  notaFiscal   NotaFiscal @relation(fields: [notaFiscalId], references: [id], onDelete: Cascade)
+  produtoId    String
+  produto      Produto    @relation(fields: [produtoId], references: [id])
+  quantidade   Int
+  valorUnitario Decimal
+}
+
+// ----------------------------------------------------
+// 5. CLIENTES E GESTÃO INDIVIDUAL DE FIADOS
+// ----------------------------------------------------
+
+model Cliente {
+  id           String           @id @default(uuid())
+  nome         String
+  cpfCnpj      String?          @unique
+  telefone     String?
+  endereco     String?
+  limiteCredito Decimal         @default(0.00)
+  saldoDevedor Decimal          @default(0.00)
+  cascosEmPosse Int             @default(0)
+  criadoEm     DateTime         @default(now())
+  atualizadoEm DateTime         @updatedAt
+
+  vendas       Venda[]
+  fiados       HistoricoFiado[]
+}
+
+enum TipoTransacaoFiado {
+  DEBITO
+  CREDITO
+}
+
+model HistoricoFiado {
+  id            String             @id @default(uuid())
+  clienteId     String
+  cliente       Cliente            @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  vendaId       String?
+  venda         Venda?             @relation(fields: [vendaId], references: [id])
+  tipo          TipoTransacaoFiado
+  valor         Decimal
+  descricao     String?
+  saldoApos     Decimal
+  criadoEm      DateTime           @default(now())
+}
+
+// ----------------------------------------------------
+// 6. CAIXA, SANGRIAS, SUPRIMENTOS E AUDITORIA
+// ----------------------------------------------------
+
+enum StatusCaixa {
+  ABERTO
+  FECHADO
+}
+
+model Caixa {
+  id              String              @id @default(uuid())
+  operadorId      String
+  operador        Funcionario         @relation("OperadorCaixa", fields: [operadorId], references: [id])
+  saldoInicial    Decimal             @default(0.00)
+  saldoFinalSistema Decimal?
+  saldoFinalFisico  Decimal?
+  quebraDeCaixa   Decimal?
+  status          StatusCaixa         @default(ABERTO)
+  abertoEm        DateTime            @default(now())
+  fechadoEm       DateTime?
+
+  movimentacoes   MovimentacaoCaixa[]
+  vendas          Venda[]
+}
+
+enum TipoMovimentacaoCaixa {
+  SUPRIMENTO
+  SANGRIA
+}
+
+model MovimentacaoCaixa {
+  id          String                @id @default(uuid())
+  caixaId     String
+  caixa       Caixa                 @relation(fields: [caixaId], references: [id], onDelete: Cascade)
+  tipo        TipoMovimentacaoCaixa
+  valor       Decimal
+  categoria   String
+  observacao  String?
+  criadoEm    DateTime              @default(now())
+}
+
+// ----------------------------------------------------
+// 7. PDV, VENDAS, ENTREGAS E PAGAMENTOS MISTOS
+// ----------------------------------------------------
+
+enum StatusVenda {
+  CONCLUIDA
+  ORCAMENTO
+  CANCELADA
+}
+
+enum TipoEntrega {
+  RETIRADA_BALCAO
+  DELIVERY
+}
+
+enum StatusEntrega {
+  PENDENTE
+  SEPARANDO
+  SAIU_PARA_ENTREGA
+  ENTREGUE
+}
+
+model Venda {
+  id              String           @id @default(uuid())
+  codigoVenda     Int              @default(autoincrement())
+  caixaId         String
+  caixa           Caixa            @relation(fields: [caixaId], references: [id])
+  funcionarioId   String
+  funcionario     Funcionario      @relation(fields: [funcionarioId], references: [id])
+  clienteId       String?
+  cliente         Cliente?         @relation(fields: [clienteId], references: [id])
+  subtotal        Decimal
+  desconto        Decimal          @default(0.00)
+  valorTotal      Decimal
+  status          StatusVenda      @default(CONCLUIDA)
+  tipoEntrega     TipoEntrega      @default(RETIRADA_BALCAO)
+  statusEntrega   StatusEntrega?
+  taxaEntrega     Decimal          @default(0.00)
+  enderecoEntrega String?
+  criadoEm        DateTime         @default(now())
+
+  itens           ItemVenda[]
+  pagamentos      PagamentoVenda[]
+  fiados          HistoricoFiado[]
+}
+
+model ItemVenda {
+  id            String   @id @default(uuid())
+  vendaId       String
+  venda         Venda    @relation(fields: [vendaId], references: [id], onDelete: Cascade)
+  produtoId     String
+  produto       Produto  @relation(fields: [produtoId], references: [id])
+  quantidade    Int
+  precoUnitario Decimal
+  precoTotal    Decimal
+}
+
+enum FormaPagamento {
+  DINHEIRO
+  PIX
+  CARTAO_DEBITO
+  CARTAO_CREDITO
+  FIADO
+}
+
+model PagamentoVenda {
+  id             String         @id @default(uuid())
+  vendaId        String
+  venda          Venda          @relation(fields: [vendaId], references: [id], onDelete: Cascade)
+  formaPagamento FormaPagamento
+  valor          Decimal
+  troco          Decimal        @default(0.00)
+}
+
+// ----------------------------------------------------
+// 8. MOVIMENTAÇÃO DE ESTOQUE, AVARIAS E CASCOS
+// ----------------------------------------------------
+
+enum TipoMovimentacaoEstoque {
+  ENTRADA_COMPRA
+  SAIDA_VENDA
+  AJUSTE_MANUAL
+  AVARIA_PERDA
+  ENTRADA_CASCO
+  SAIDA_CASCO
+}
+
+model MovimentacaoEstoque {
+  id           String                  @id @default(uuid())
+  produtoId    String
+  produto      Produto                 @relation(fields: [produtoId], references: [id])
+  tipo         TipoMovimentacaoEstoque
+  quantidade   Int
+  motivo       String?
+  criadoEm     DateTime                @default(now())
+}
+
+// ----------------------------------------------------
+// 9. FINANCEIRO COMPLETO (CONTAS A PAGAR / RECEBER)
+// ----------------------------------------------------
+
+enum StatusConta {
+  PENDENTE
+  PAGO
+  CANCELADO
+}
+
+model ContaPagar {
+  id           String      @id @default(uuid())
+  descricao    String
+  categoria    String
+  valor        Decimal
+  dataVencimento DateTime
+  dataPagamento  DateTime?
+  status       StatusConta @default(PENDENTE)
+  notaFiscalId String?
+  notaFiscal   NotaFiscal? @relation(fields: [notaFiscalId], references: [id])
+  criadoEm     DateTime    @default(now())
+}
+
+model ContaReceber {
+  id           String      @id @default(uuid())
+  descricao    String
+  valor        Decimal
+  dataVencimento DateTime
+  dataRecebimento DateTime?
+  status       StatusConta @default(PENDENTE)
+  criadoEm     DateTime    @default(now())
+}
