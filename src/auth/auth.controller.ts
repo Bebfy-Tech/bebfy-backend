@@ -1,14 +1,24 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Body, UseGuards, Request } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { LoginDto } from './dto/login.dto';
+import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Controller('auth')
 export class AuthController {
+  // Injeta o serviço de autenticação
   constructor(private readonly authService: AuthService) {}
 
-  @HttpCode(HttpStatus.OK)
+  // Rota pública de Login
   @Post('login')
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  async login(@Body() body: { email: string; senha: string }) {
+    // Passa o objeto 'body' completo (1 único argumento) para o AuthService
+    return this.authService.login(body);
+  }
+
+  // Rota protegida por JWT (retorna os dados do utilizador autenticado)
+  @UseGuards(JwtAuthGuard)
+  @Get('perfil')
+  getPerfil(@Request() req) {
+    // Retorna os dados do utilizador injetados pelo JwtStrategy em req.user
+    return req.user;
   }
 }
