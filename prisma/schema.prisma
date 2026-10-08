@@ -59,7 +59,8 @@ model ConfigGlobal {
   telefone               String?
   endereco               String?
   obrigarCpfClienteVenda Boolean  @default(false)
-  bloquearFiadoAtrasado Boolean  @default(true)
+  bloquearFiadoAtrasado  Boolean  @default(true)
+  criadoEm               DateTime @default(now())
   atualizadoEm           DateTime @updatedAt
 }
 
@@ -77,23 +78,24 @@ model Categoria {
 }
 
 model Produto {
-  id                 String       @id @default(uuid())
+  // ID do produto alterado para número sequencial autoincrementado (1, 2, 3...)
+  id                 Int                   @id @default(autoincrement())
   nome               String
-  codigoBarras       String?      @unique
+  codigoBarras       String?               @unique
   ml                 Int?
-  unidadeMedida      String       @default("UN")
+  unidadeMedida      String                @default("UN")
   fardoQuantidade    Int?
-  precoCusto         Decimal      @default(0.00)
-  precoVendaVarejo   Decimal      @default(0.00)
+  precoCusto         Decimal               @default(0.00)
+  precoVendaVarejo   Decimal               @default(0.00)
   precoVendaAtacado  Decimal?
   qtdAtacadoMinima   Int?
-  estoqueAtual       Int          @default(0)
-  estoqueMinimo      Int          @default(0)
-  retornavel         Boolean      @default(false)
+  estoqueAtual       Int                   @default(0)
+  estoqueMinimo      Int                   @default(0)
+  retornavel         Boolean               @default(false)
   categoriaId        String?
-  categoria          Categoria?   @relation(fields: [categoriaId], references: [id])
-  criadoEm           DateTime     @default(now())
-  atualizadoEm       DateTime     @updatedAt
+  categoria          Categoria?            @relation(fields: [categoriaId], references: [id])
+  criadoEm           DateTime              @default(now())
+  atualizadoEm       DateTime              @updatedAt
 
   lotes              LoteProduto[]
   historicoCustos    HistoricoCusto[]
@@ -103,8 +105,10 @@ model Produto {
 }
 
 model LoteProduto {
-  id             String    @id @default(uuid())
-  produtoId      String
+  // ID do lote alterado para número sequencial (1, 2, 3...)
+  id             Int       @id @default(autoincrement())
+  // produtoId alterado para Int para corresponder ao novo tipo do Produto.id
+  produtoId      Int
   produto        Produto   @relation(fields: [produtoId], references: [id], onDelete: Cascade)
   numeroLote     String?
   quantidade     Int
@@ -113,12 +117,13 @@ model LoteProduto {
 }
 
 model HistoricoCusto {
-  id           String   @id @default(uuid())
-  produtoId    String
-  produto      Produto  @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  id            String   @id @default(uuid())
+  produtoId     Int
+  produto       Produto  @relation(fields: [produtoId], references: [id], onDelete: Cascade)
   custoAnterior Decimal
-  custoNovo    Decimal
+  custoNovo     Decimal
   dataAlteracao DateTime @default(now())
+  criadoEm      DateTime @default(now())
 }
 
 // ----------------------------------------------------
@@ -126,39 +131,40 @@ model HistoricoCusto {
 // ----------------------------------------------------
 
 model Fornecedor {
-  id          String       @id @default(uuid())
-  cnpj        String       @unique
-  razaoSocial String
+  id           String        @id @default(uuid())
+  cnpj         String        @unique
+  razaoSocial  String
   nomeFantasia String?
-  telefone    String?
-  email       String?
-  criadoEm    DateTime     @default(now())
+  telefone     String?
+  email        String?
+  criadoEm     DateTime      @default(now())
 
   notasFiscais NotaFiscal[]
 }
 
 model NotaFiscal {
-  id             String           @id @default(uuid())
-  chaveAcesso    String           @unique
-  numeroNota     String
-  fornecedorId   String
-  fornecedor     Fornecedor       @relation(fields: [fornecedorId], references: [id])
-  valorTotal     Decimal
-  dataEmissao    DateTime
-  criadoEm       DateTime         @default(now())
+  id           String           @id @default(uuid())
+  chaveAcesso  String           @unique
+  numeroNota   String
+  fornecedorId String
+  fornecedor   Fornecedor       @relation(fields: [fornecedorId], references: [id])
+  valorTotal   Decimal
+  dataEmissao  DateTime
+  criadoEm     DateTime         @default(now())
 
-  itens          ItemNotaFiscal[]
-  contasAPagar   ContaPagar[]
+  itens        ItemNotaFiscal[]
+  contasAPagar ContaPagar[]
 }
 
 model ItemNotaFiscal {
-  id           String     @id @default(uuid())
-  notaFiscalId String
-  notaFiscal   NotaFiscal @relation(fields: [notaFiscalId], references: [id], onDelete: Cascade)
-  produtoId    String
-  produto      Produto    @relation(fields: [produtoId], references: [id])
-  quantidade   Int
+  id            String     @id @default(uuid())
+  notaFiscalId  String
+  notaFiscal    NotaFiscal @relation(fields: [notaFiscalId], references: [id], onDelete: Cascade)
+  produtoId     Int
+  produto       Produto    @relation(fields: [produtoId], references: [id])
+  quantidade    Int
   valorUnitario Decimal
+  criadoEm      DateTime   @default(now())
 }
 
 // ----------------------------------------------------
@@ -166,19 +172,19 @@ model ItemNotaFiscal {
 // ----------------------------------------------------
 
 model Cliente {
-  id           String           @id @default(uuid())
-  nome         String
-  cpfCnpj      String?          @unique
-  telefone     String?
-  endereco     String?
-  limiteCredito Decimal         @default(0.00)
-  saldoDevedor Decimal          @default(0.00)
-  cascosEmPosse Int             @default(0)
-  criadoEm     DateTime         @default(now())
-  atualizadoEm DateTime         @updatedAt
+  id            String           @id @default(uuid())
+  nome          String
+  cpfCnpj       String?          @unique
+  telefone      String?
+  endereco      String?
+  limiteCredito Decimal          @default(0.00)
+  saldoDevedor  Decimal          @default(0.00)
+  cascosEmPosse Int              @default(0)
+  criadoEm      DateTime         @default(now())
+  atualizadoEm  DateTime         @updatedAt
 
-  vendas       Venda[]
-  fiados       HistoricoFiado[]
+  vendas        Venda[]
+  fiados        HistoricoFiado[]
 }
 
 enum TipoTransacaoFiado {
@@ -187,16 +193,16 @@ enum TipoTransacaoFiado {
 }
 
 model HistoricoFiado {
-  id            String             @id @default(uuid())
-  clienteId     String
-  cliente       Cliente            @relation(fields: [clienteId], references: [id], onDelete: Cascade)
-  vendaId       String?
-  venda         Venda?             @relation(fields: [vendaId], references: [id])
-  tipo          TipoTransacaoFiado
-  valor         Decimal
-  descricao     String?
-  saldoApos     Decimal
-  criadoEm      DateTime           @default(now())
+  id        String             @id @default(uuid())
+  clienteId String
+  cliente   Cliente            @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  vendaId   String?
+  venda     Venda?             @relation(fields: [vendaId], references: [id])
+  tipo      TipoTransacaoFiado
+  valor     Decimal
+  descricao String?
+  saldoApos Decimal
+  criadoEm  DateTime           @default(now())
 }
 
 // ----------------------------------------------------
@@ -209,19 +215,20 @@ enum StatusCaixa {
 }
 
 model Caixa {
-  id              String              @id @default(uuid())
-  operadorId      String
-  operador        Funcionario         @relation("OperadorCaixa", fields: [operadorId], references: [id])
-  saldoInicial    Decimal             @default(0.00)
+  id                String              @id @default(uuid())
+  operadorId        String
+  operador          Funcionario         @relation("OperadorCaixa", fields: [operadorId], references: [id])
+  saldoInicial      Decimal             @default(0.00)
   saldoFinalSistema Decimal?
   saldoFinalFisico  Decimal?
-  quebraDeCaixa   Decimal?
-  status          StatusCaixa         @default(ABERTO)
-  abertoEm        DateTime            @default(now())
-  fechadoEm       DateTime?
+  quebraDeCaixa     Decimal?
+  status            StatusCaixa         @default(ABERTO)
+  abertoEm          DateTime            @default(now())
+  fechadoEm         DateTime?
+  criadoEm          DateTime            @default(now())
 
-  movimentacoes   MovimentacaoCaixa[]
-  vendas          Venda[]
+  movimentacoes     MovimentacaoCaixa[]
+  vendas            Venda[]
 }
 
 enum TipoMovimentacaoCaixa {
@@ -230,14 +237,14 @@ enum TipoMovimentacaoCaixa {
 }
 
 model MovimentacaoCaixa {
-  id          String                @id @default(uuid())
-  caixaId     String
-  caixa       Caixa                 @relation(fields: [caixaId], references: [id], onDelete: Cascade)
-  tipo        TipoMovimentacaoCaixa
-  valor       Decimal
-  categoria   String
-  observacao  String?
-  criadoEm    DateTime              @default(now())
+  id         String                @id @default(uuid())
+  caixaId    String
+  caixa      Caixa                 @relation(fields: [caixaId], references: [id], onDelete: Cascade)
+  tipo       TipoMovimentacaoCaixa
+  valor      Decimal
+  categoria  String
+  observacao String?
+  criadoEm   DateTime              @default(now())
 }
 
 // ----------------------------------------------------
@@ -290,11 +297,12 @@ model ItemVenda {
   id            String   @id @default(uuid())
   vendaId       String
   venda         Venda    @relation(fields: [vendaId], references: [id], onDelete: Cascade)
-  produtoId     String
+  produtoId     Int
   produto       Produto  @relation(fields: [produtoId], references: [id])
   quantidade    Int
   precoUnitario Decimal
   precoTotal    Decimal
+  criadoEm      DateTime @default(now())
 }
 
 enum FormaPagamento {
@@ -312,6 +320,7 @@ model PagamentoVenda {
   formaPagamento FormaPagamento
   valor          Decimal
   troco          Decimal        @default(0.00)
+  criadoEm       DateTime       @default(now())
 }
 
 // ----------------------------------------------------
@@ -328,13 +337,13 @@ enum TipoMovimentacaoEstoque {
 }
 
 model MovimentacaoEstoque {
-  id           String                  @id @default(uuid())
-  produtoId    String
-  produto      Produto                 @relation(fields: [produtoId], references: [id])
-  tipo         TipoMovimentacaoEstoque
-  quantidade   Int
-  motivo       String?
-  criadoEm     DateTime                @default(now())
+  id         String                  @id @default(uuid())
+  produtoId  Int
+  produto    Produto                 @relation(fields: [produtoId], references: [id])
+  tipo       TipoMovimentacaoEstoque
+  quantidade Int
+  motivo     String?
+  criadoEm   DateTime                @default(now())
 }
 
 // ----------------------------------------------------
@@ -348,24 +357,24 @@ enum StatusConta {
 }
 
 model ContaPagar {
-  id           String      @id @default(uuid())
-  descricao    String
-  categoria    String
-  valor        Decimal
+  id             String      @id @default(uuid())
+  descricao      String
+  categoria      String
+  valor          Decimal
   dataVencimento DateTime
   dataPagamento  DateTime?
-  status       StatusConta @default(PENDENTE)
-  notaFiscalId String?
-  notaFiscal   NotaFiscal? @relation(fields: [notaFiscalId], references: [id])
-  criadoEm     DateTime    @default(now())
+  status         StatusConta @default(PENDENTE)
+  notaFiscalId   String?
+  notaFiscal     NotaFiscal? @relation(fields: [notaFiscalId], references: [id])
+  criadoEm       DateTime    @default(now())
 }
 
 model ContaReceber {
-  id           String      @id @default(uuid())
-  descricao    String
-  valor        Decimal
-  dataVencimento DateTime
+  id              String      @id @default(uuid())
+  descricao       String
+  valor           Decimal
+  dataVencimento  DateTime
   dataRecebimento DateTime?
-  status       StatusConta @default(PENDENTE)
-  criadoEm     DateTime    @default(now())
+  status          StatusConta @default(PENDENTE)
+  criadoEm        DateTime    @default(now())
 }
