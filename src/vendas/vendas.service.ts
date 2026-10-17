@@ -226,7 +226,7 @@ export class VendasService {
     return venda;
   }
 
-  // Cancela uma venda e estorna o estoque dos produtos
+// Cancela uma venda, estorna o estoque dos produtos e reverte débitos no Fiado (se houver)
   async cancelarVenda(id: string) {
     const venda = await this.findOne(id);
 
@@ -235,7 +235,7 @@ export class VendasService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // Reverte o estoque dos produtos
+      // 1. Estorna/Devolve a quantidade dos produtos ao estoque
       for (const item of venda.itens) {
         await tx.produto.update({
           where: { id: item.produtoId },
@@ -247,10 +247,48 @@ export class VendasService {
         });
       }
 
-      // Atualiza o status da venda para CANCELADA
+      // 2. Se a venda teve pagamento no FIADO, estorna o débito da conta do cliente
+      const pagamentoFiado = venda.pagamentos.find(
+        (p) => p.formaPagamento === FormaPagamento.FIADO,
+      );
+
+      if (pagamentoFiado && venda.clienteId) {
+        const valorFiado = Number(pagamentoFiado.valor);
+
+        const clienteAtual = await tx.cliente.findUnique({
+          where: { id: venda.clienteId },
+        });
+
+        const novoSaldo = Math.max(0, Number(clienteAtual.saldoDevedor) - valorFiado);
+
+        // Subtrai o valor do saldo devedor do cliente
+        await tx.cliente.update({
+          where: { id: venda.clienteId },
+          data: { saldoDevedor: novoSaldo },
+        });
+
+        // Registra o estorno no Histórico do Fiado
+        await tx.historicoFiado.create({
+          data: {
+            clienteId: venda.clienteId,
+            vendaId: venda.id,
+            tipo: TipoTransacaoFiado.CREDITO,
+            valor: valorFiado,
+            descricao: `Estorno/Cancelamento da venda código #${venda.codigoVenda}`,
+            saldoApos: novoSaldo,
+          },
+        });
+      }
+
+      // 3. Atualiza o status da venda para CANCELADA
       return tx.venda.update({
         where: { id },
         data: { status: StatusVenda.CANCELADA },
+        include: {
+          itens: true,
+          pagamentos: true,
+          cliente: true,
+        },
       });
     });
   }

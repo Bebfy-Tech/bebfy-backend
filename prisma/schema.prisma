@@ -330,6 +330,10 @@ model PagamentoVenda {
 enum TipoMovimentacaoEstoque {
   ENTRADA_COMPRA
   SAIDA_VENDA
+  AJUSTE_ENTRADA
+  AJUSTE_SAIDA
+  PERDA
+  AVARIA
   AJUSTE_MANUAL
   AVARIA_PERDA
   ENTRADA_CASCO
@@ -343,6 +347,7 @@ model MovimentacaoEstoque {
   tipo       TipoMovimentacaoEstoque
   quantidade Int
   motivo     String?
+  observacao String?
   criadoEm   DateTime                @default(now())
 }
 
