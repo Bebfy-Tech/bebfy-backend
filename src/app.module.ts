@@ -8,9 +8,11 @@ import { CategoriasModule } from './categorias/categorias.module';
 import { LotesModule } from './lotes/lotes.module';
 import { ClientesModule } from './clientes/clientes.module';
 import { FiadosModule } from './fiados/fiados.module';
+import { FuncionariosModule } from './funcionarios/funcionarios.module';
+import { CaixaModule } from './caixa/caixa.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, ProdutosModule, CategoriasModule, LotesModule, ClientesModule, FiadosModule],
+  imports: [PrismaModule, AuthModule, ProdutosModule, CategoriasModule, LotesModule, ClientesModule, FiadosModule, FuncionariosModule, CaixaModule],
   controllers: [AppController],
   providers: [AppService],
 })
