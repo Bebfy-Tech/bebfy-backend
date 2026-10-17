@@ -1,26 +1,66 @@
-import { Injectable } from '@nestjs/common';
-import { CreateFornecedoreDto } from './dto/create-fornecedore.dto';
-import { UpdateFornecedoreDto } from './dto/update-fornecedore.dto';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateFornecedorDto } from './dto/create-fornecedor.dto';
+import { UpdateFornecedorDto } from './dto/update-fornecedor.dto';
 
 @Injectable()
 export class FornecedoresService {
-  create(createFornecedoreDto: CreateFornecedoreDto) {
-    return 'This action adds a new fornecedore';
+  constructor(private readonly prisma: PrismaService) {}
+
+  async create(createFornecedorDto: CreateFornecedorDto) {
+    const cnpjExiste = await this.prisma.fornecedor.findUnique({
+      where: { cnpj: createFornecedorDto.cnpj },
+    });
+
+    if (cnpjExiste) {
+      throw new ConflictException(
+        'Já existe um fornecedor cadastrado com este CNPJ.',
+      );
+    }
+
+    return this.prisma.fornecedor.create({
+      data: createFornecedorDto,
+    });
   }
 
-  findAll() {
-    return `This action returns all fornecedores`;
+  async findAll() {
+    return this.prisma.fornecedor.findMany({
+      orderBy: { criadoEm: 'desc' },
+    });
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} fornecedore`;
+  async findOne(id: string) {
+    const fornecedor = await this.prisma.fornecedor.findUnique({
+      where: { id },
+    });
+
+    if (!fornecedor) {
+      throw new NotFoundException(
+        `Fornecedor com o ID ${id} não foi encontrado.`,
+      );
+    }
+
+    return fornecedor;
   }
 
-  update(id: number, updateFornecedoreDto: UpdateFornecedoreDto) {
-    return `This action updates a #${id} fornecedore`;
+  async update(id: string, updateFornecedorDto: UpdateFornecedorDto) {
+    await this.findOne(id);
+
+    return this.prisma.fornecedor.update({
+      where: { id },
+      data: updateFornecedorDto,
+    });
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} fornecedore`;
+  async remove(id: string) {
+    await this.findOne(id);
+
+    return this.prisma.fornecedor.delete({
+      where: { id },
+    });
   }
 }

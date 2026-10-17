@@ -1,15 +1,26 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+} from '@nestjs/common';
 import { FornecedoresService } from './fornecedores.service';
-import { CreateFornecedoreDto } from './dto/create-fornecedore.dto';
-import { UpdateFornecedoreDto } from './dto/update-fornecedore.dto';
+import { CreateFornecedorDto } from './dto/create-fornecedor.dto';
+import { UpdateFornecedorDto } from './dto/update-fornecedor.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
+@UseGuards(JwtAuthGuard)
 @Controller('fornecedores')
 export class FornecedoresController {
   constructor(private readonly fornecedoresService: FornecedoresService) {}
 
   @Post()
-  create(@Body() createFornecedoreDto: CreateFornecedoreDto) {
-    return this.fornecedoresService.create(createFornecedoreDto);
+  create(@Body() createFornecedorDto: CreateFornecedorDto) {
+    return this.fornecedoresService.create(createFornecedorDto);
   }
 
   @Get()
@@ -19,16 +30,19 @@ export class FornecedoresController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.fornecedoresService.findOne(+id);
+    return this.fornecedoresService.findOne(id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateFornecedoreDto: UpdateFornecedoreDto) {
-    return this.fornecedoresService.update(+id, updateFornecedoreDto);
+  update(
+    @Param('id') id: string,
+    @Body() updateFornecedorDto: UpdateFornecedorDto,
+  ) {
+    return this.fornecedoresService.update(id, updateFornecedorDto);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.fornecedoresService.remove(+id);
+    return this.fornecedoresService.remove(id);
   }
 }
