@@ -1,34 +1,38 @@
-// Importa o ValidationPipe para tratamento e validação dos DTOs
-import { ValidationPipe } from '@nestjs/common';
-// Importa o NestFactory para inicializar a aplicação NestJS
 import { NestFactory } from '@nestjs/core';
-// Importa o módulo raiz da aplicação
 import { AppModule } from './app.module';
+import { ValidationPipe } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
-  // Cria a instância da aplicação NestJS a partir do AppModule
   const app = await NestFactory.create(AppModule);
 
-  // Habilita o CORS (Cross-Origin Resource Sharing)
-  // Essencial para permitir que o Frontend em React/Vite faça requisições para a API sem bloqueios do navegador
+  // 1. Habilita CORS para o Frontend (Vite/React) conseguir fazer requisições sem bloqueio
   app.enableCors();
 
-  // Aplica o ValidationPipe globalmente para validar todas as requisições da API
+  // 2. Habilita a validação e transformação automática de DTOs globalmente
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // Remove do body qualquer propriedade que não esteja declarada no DTO
-      forbidNonWhitelisted: true, // Retorna erro 400 se o cliente enviar campos não autorizados no JSON
-      transform: true, // Converte automaticamente os tipos de dados da requisição (ex: string para number quando indicado)
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
     }),
   );
 
-  // Define a porta do servidor obtendo das variáveis de ambiente (.env) ou usando a 3000 por padrão
-  const port = process.env.PORT || 3000;
+  // 3. Configuração da documentação interativa com Swagger
+  const config = new DocumentBuilder()
+    .setTitle('Bebfy API')
+    .setDescription('API RESTful do sistema de gestão Bebfy para distribuidoras e conveniências')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
 
-  // Inicia o servidor HTTP na porta configurada
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api', app, document);
+
+  const port = process.env.PORT ?? 3000;
   await app.listen(port);
-  console.log(`🚀 Servidor Bebfy rodando com sucesso na porta: ${port}`);
-}
 
-// Executa a função de inicialização da aplicação
+  console.log(`\n🚀 Servidor NestJS rodando em: http://localhost:${port}`);
+  console.log(`📖 Documentação Swagger disponível em: http://localhost:${port}/api\n`);
+}
 bootstrap();
