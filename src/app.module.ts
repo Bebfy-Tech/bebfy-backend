@@ -13,9 +13,10 @@ import { CaixaModule } from './caixa/caixa.module';
 import { VendasModule } from './vendas/vendas.module';
 import { FornecedoresModule } from './fornecedores/fornecedores.module';
 import { MovimentacoesEstoqueModule } from './movimentacoes-estoque/movimentacoes-estoque.module';
+import { RelatoriosModule } from './relatorios/relatorios.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, ProdutosModule, CategoriasModule, LotesModule, ClientesModule, FiadosModule, FuncionariosModule, CaixaModule, VendasModule, FornecedoresModule, MovimentacoesEstoqueModule],
+  imports: [PrismaModule, AuthModule, ProdutosModule, CategoriasModule, LotesModule, ClientesModule, FiadosModule, FuncionariosModule, CaixaModule, VendasModule, FornecedoresModule, MovimentacoesEstoqueModule, RelatoriosModule],
   controllers: [AppController],
   providers: [AppService],
 })
