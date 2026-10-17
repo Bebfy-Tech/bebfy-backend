@@ -10,9 +10,11 @@ import { ClientesModule } from './clientes/clientes.module';
 import { FiadosModule } from './fiados/fiados.module';
 import { FuncionariosModule } from './funcionarios/funcionarios.module';
 import { CaixaModule } from './caixa/caixa.module';
+import { VendasModule } from './vendas/vendas.module';
+import { FornecedoresModule } from './fornecedores/fornecedores.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, ProdutosModule, CategoriasModule, LotesModule, ClientesModule, FiadosModule, FuncionariosModule, CaixaModule],
+  imports: [PrismaModule, AuthModule, ProdutosModule, CategoriasModule, LotesModule, ClientesModule, FiadosModule, FuncionariosModule, CaixaModule, VendasModule, FornecedoresModule],
   controllers: [AppController],
   providers: [AppService],
 })
