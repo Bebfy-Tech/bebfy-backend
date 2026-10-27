@@ -7,9 +7,101 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ----------------------------------------------------
+// ====================================================
+// 0. PAINEL ADMIN SAAS & CONTROLE MULTI-TENANT
+// ====================================================
+
+enum StatusEmpresa {
+  ATIVA
+  SUSPENSA
+  CANCELADA
+  EM_TESTE
+}
+
+enum TipoPlano {
+  VAREJO_BASICO
+  VAREJO_PRO
+  ATACADO_FULL
+  PERSONALIZADO
+}
+
+enum NomeModulo {
+  // Varejo / PDV
+  CAIXA_PDV
+  FIADOS
+  VASILHAMES_RETORNAVEIS
+  ENTREGAS_DELIVERY
+
+  // Atacado B2B
+  PEDIDOS_ATACADO
+  TABELA_PRECO_VOLUME
+  ROTAS_CAMINHOES
+  CREDITO_B2B
+
+  // Gestão & Core
+  ESTOQUE_LOTES
+  COMPRAS_FORNECEDORES
+  RELATORIOS_AVANCADOS
+}
+
+model Empresa {
+  id                   Int                   @id @default(autoincrement())
+  nomeFantasia         String
+  razaoSocial          String?
+  cnpj                 String?               @unique
+  slug                 String                @unique // ex: empresa.bebfy.app -> "empresa"
+  subdominio           String?               @unique // ex: "adega-do-ze", "distribuidora-lima"
+  status               StatusEmpresa         @default(ATIVA)
+  planoId              Int?
+  plano                Plano?                @relation(fields: [planoId], references: [id])
+  criadoEm             DateTime              @default(now())
+  atualizadoEm         DateTime              @updatedAt
+
+  // Relacionamentos Multi-tenant
+  modulosAtivos        EmpresaModulo[]
+  funcionarios         Funcionario[]
+  config               ConfigGlobal?
+  categorias           Categoria[]
+  produtos             Produto[]
+  lotes                LoteProduto[]
+  fornecedores         Fornecedor[]
+  notasFiscais         NotaFiscal[]
+  clientes             Cliente[]
+  caixas               Caixa[]
+  vendas               Venda[]
+  movimentacoesEstoque MovimentacaoEstoque[]
+  contasPagar          ContaPagar[]
+  contasReceber        ContaReceber[]
+
+  @@map("empresas")
+}
+
+model Plano {
+  id          Int        @id @default(autoincrement())
+  nome        String
+  tipo        TipoPlano  @default(VAREJO_BASICO)
+  precoMensal Decimal    @db.Decimal(10, 2)
+  empresas    Empresa[]
+  criadoEm    DateTime   @default(now())
+
+  @@map("planos")
+}
+
+model EmpresaModulo {
+  id        Int        @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  modulo    NomeModulo
+  ativo     Boolean    @default(true)
+  criadoEm  DateTime   @default(now())
+
+  @@unique([empresaId, modulo])
+  @@map("empresa_modulos")
+}
+
+// ====================================================
 // 1. USUÁRIOS, FUNCIONÁRIOS E PERMISSÕES
-// ----------------------------------------------------
+// ====================================================
 
 enum Cargo {
   ADMINISTRADOR
@@ -22,38 +114,44 @@ enum Cargo {
 }
 
 model Funcionario {
-  id              String      @id @default(uuid())
-  nome            String
-  cpf             String      @unique
-  telefone        String?
-  cargo           Cargo
-  descontoMaximo  Decimal     @default(0.00)
-  ativo           Boolean     @default(true)
-  criadoEm        DateTime    @default(now())
-  atualizadoEm    DateTime    @updatedAt
+  id             String      @id @default(uuid())
+  empresaId      Int
+  empresa        Empresa     @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nome           String
+  cpf            String
+  telefone       String?
+  cargo          Cargo
+  descontoMaximo Decimal     @default(0.00)
+  ativo          Boolean     @default(true)
+  criadoEm       DateTime    @default(now())
+  atualizadoEm   DateTime    @updatedAt
 
-  usuario         Usuario?
-  vendas          Venda[]
-  caixasFechados  Caixa[]     @relation("OperadorCaixa")
+  usuario        Usuario?
+  vendas         Venda[]
+  caixasFechados Caixa[]     @relation("OperadorCaixa")
+
+  @@unique([empresaId, cpf])
 }
 
 model Usuario {
-  id             String      @id @default(uuid())
-  email          String      @unique
-  senha          String
-  funcionarioId  String      @unique
-  funcionario    Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
-  permissoes     String[]
-  criadoEm       DateTime    @default(now())
-  atualizadoEm   DateTime    @updatedAt
+  id            String      @id @default(uuid())
+  email         String      @unique
+  senha         String
+  funcionarioId String      @unique
+  funcionario   Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
+  permissoes    String[]
+  criadoEm      DateTime    @default(now())
+  atualizadoEm  DateTime    @updatedAt
 }
 
-// ----------------------------------------------------
-// 2. PARÂMETROS GLOBAIS DA LOJA
-// ----------------------------------------------------
+// ====================================================
+// 2. PARÂMETROS GLOBAIS DA LOJA / TENANT
+// ====================================================
 
 model ConfigGlobal {
   id                     String   @id @default(uuid())
+  empresaId              Int      @unique
+  empresa                Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   nomeEmpresa            String
   cnpj                   String?
   telefone               String?
@@ -64,50 +162,57 @@ model ConfigGlobal {
   atualizadoEm           DateTime @updatedAt
 }
 
-// ----------------------------------------------------
-// 3. PRODUTOS, LOTES, VASILHAMES E INFLAÇÃO DE CUSTO
-// ----------------------------------------------------
+// ====================================================
+// 3. PRODUTOS, LOTES, VASILHAMES E CUSTOS
+// ====================================================
 
 model Categoria {
   id        String    @id @default(uuid())
-  nome      String    @unique
+  empresaId Int
+  empresa   Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nome      String
   descricao String?
   produtos  Produto[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+
+  @@unique([empresaId, nome])
 }
 
 model Produto {
-  // ID do produto alterado para número sequencial autoincrementado (1, 2, 3...)
-  id                 Int                   @id @default(autoincrement())
-  nome               String
-  codigoBarras       String?               @unique
-  ml                 Int?
-  unidadeMedida      String                @default("UN")
-  fardoQuantidade    Int?
-  precoCusto         Decimal               @default(0.00)
-  precoVendaVarejo   Decimal               @default(0.00)
-  precoVendaAtacado  Decimal?
-  qtdAtacadoMinima   Int?
-  estoqueAtual       Int                   @default(0)
-  estoqueMinimo      Int                   @default(0)
-  retornavel         Boolean               @default(false)
-  categoriaId        String?
-  categoria          Categoria?            @relation(fields: [categoriaId], references: [id])
-  criadoEm           DateTime              @default(now())
-  atualizadoEm       DateTime              @updatedAt
+  id                Int                   @id @default(autoincrement())
+  empresaId         Int
+  empresa           Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nome              String
+  codigoBarras      String?
+  ml                Int?
+  unidadeMedida     String                @default("UN")
+  fardoQuantidade   Int?
+  precoCusto        Decimal               @default(0.00)
+  precoVendaVarejo  Decimal               @default(0.00)
+  precoVendaAtacado Decimal?
+  qtdAtacadoMinima  Int?
+  estoqueAtual      Int                   @default(0)
+  estoqueMinimo     Int                   @default(0)
+  retornavel        Boolean               @default(false)
+  categoriaId       String?
+  categoria         Categoria?            @relation(fields: [categoriaId], references: [id])
+  criadoEm          DateTime              @default(now())
+  atualizadoEm      DateTime              @updatedAt
 
-  lotes              LoteProduto[]
-  historicoCustos    HistoricoCusto[]
-  itensVenda         ItemVenda[]
-  itensNotaFiscal    ItemNotaFiscal[]
-  movimentacoes      MovimentacaoEstoque[]
+  lotes             LoteProduto[]
+  historicoCustos   HistoricoCusto[]
+  itensVenda        ItemVenda[]
+  itensNotaFiscal   ItemNotaFiscal[]
+  movimentacoes     MovimentacaoEstoque[]
+
+  @@unique([empresaId, codigoBarras])
 }
 
 model LoteProduto {
-  // ID do lote alterado para número sequencial (1, 2, 3...)
   id             Int       @id @default(autoincrement())
-  // produtoId alterado para Int para corresponder ao novo tipo do Produto.id
+  empresaId      Int
+  empresa        Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   produtoId      Int
   produto        Produto   @relation(fields: [produtoId], references: [id], onDelete: Cascade)
   numeroLote     String?
@@ -126,25 +231,31 @@ model HistoricoCusto {
   criadoEm      DateTime @default(now())
 }
 
-// ----------------------------------------------------
+// ====================================================
 // 4. FORNECEDORES E IMPORTAÇÃO DE XML (NF-e)
-// ----------------------------------------------------
+// ====================================================
 
 model Fornecedor {
-  id           String        @id @default(uuid())
-  cnpj         String        @unique
+  id           String       @id @default(uuid())
+  empresaId    Int
+  empresa      Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  cnpj         String
   razaoSocial  String
   nomeFantasia String?
   telefone     String?
   email        String?
-  criadoEm     DateTime      @default(now())
+  criadoEm     DateTime     @default(now())
 
   notasFiscais NotaFiscal[]
+
+  @@unique([empresaId, cnpj])
 }
 
 model NotaFiscal {
   id           String           @id @default(uuid())
-  chaveAcesso  String           @unique
+  empresaId    Int
+  empresa      Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  chaveAcesso  String
   numeroNota   String
   fornecedorId String
   fornecedor   Fornecedor       @relation(fields: [fornecedorId], references: [id])
@@ -154,6 +265,8 @@ model NotaFiscal {
 
   itens        ItemNotaFiscal[]
   contasAPagar ContaPagar[]
+
+  @@unique([empresaId, chaveAcesso])
 }
 
 model ItemNotaFiscal {
@@ -167,14 +280,16 @@ model ItemNotaFiscal {
   criadoEm      DateTime   @default(now())
 }
 
-// ----------------------------------------------------
+// ====================================================
 // 5. CLIENTES E GESTÃO INDIVIDUAL DE FIADOS
-// ----------------------------------------------------
+// ====================================================
 
 model Cliente {
   id            String           @id @default(uuid())
+  empresaId     Int
+  empresa       Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   nome          String
-  cpfCnpj       String?          @unique
+  cpfCnpj       String?
   telefone      String?
   endereco      String?
   limiteCredito Decimal          @default(0.00)
@@ -185,6 +300,8 @@ model Cliente {
 
   vendas        Venda[]
   fiados        HistoricoFiado[]
+
+  @@unique([empresaId, cpfCnpj])
 }
 
 enum TipoTransacaoFiado {
@@ -205,9 +322,9 @@ model HistoricoFiado {
   criadoEm  DateTime           @default(now())
 }
 
-// ----------------------------------------------------
+// ====================================================
 // 6. CAIXA, SANGRIAS, SUPRIMENTOS E AUDITORIA
-// ----------------------------------------------------
+// ====================================================
 
 enum StatusCaixa {
   ABERTO
@@ -216,6 +333,8 @@ enum StatusCaixa {
 
 model Caixa {
   id                String              @id @default(uuid())
+  empresaId         Int
+  empresa           Empresa             @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   operadorId        String
   operador          Funcionario         @relation("OperadorCaixa", fields: [operadorId], references: [id])
   saldoInicial      Decimal             @default(0.00)
@@ -247,9 +366,9 @@ model MovimentacaoCaixa {
   criadoEm   DateTime              @default(now())
 }
 
-// ----------------------------------------------------
+// ====================================================
 // 7. PDV, VENDAS, ENTREGAS E PAGAMENTOS MISTOS
-// ----------------------------------------------------
+// ====================================================
 
 enum StatusVenda {
   CONCLUIDA
@@ -271,6 +390,8 @@ enum StatusEntrega {
 
 model Venda {
   id              String           @id @default(uuid())
+  empresaId       Int
+  empresa         Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   codigoVenda     Int              @default(autoincrement())
   caixaId         String
   caixa           Caixa            @relation(fields: [caixaId], references: [id])
@@ -323,9 +444,9 @@ model PagamentoVenda {
   criadoEm       DateTime       @default(now())
 }
 
-// ----------------------------------------------------
+// ====================================================
 // 8. MOVIMENTAÇÃO DE ESTOQUE, AVARIAS E CASCOS
-// ----------------------------------------------------
+// ====================================================
 
 enum TipoMovimentacaoEstoque {
   ENTRADA_COMPRA
@@ -342,6 +463,8 @@ enum TipoMovimentacaoEstoque {
 
 model MovimentacaoEstoque {
   id         String                  @id @default(uuid())
+  empresaId  Int
+  empresa    Empresa                 @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   produtoId  Int
   produto    Produto                 @relation(fields: [produtoId], references: [id])
   tipo       TipoMovimentacaoEstoque
@@ -351,9 +474,9 @@ model MovimentacaoEstoque {
   criadoEm   DateTime                @default(now())
 }
 
-// ----------------------------------------------------
+// ====================================================
 // 9. FINANCEIRO COMPLETO (CONTAS A PAGAR / RECEBER)
-// ----------------------------------------------------
+// ====================================================
 
 enum StatusConta {
   PENDENTE
@@ -363,6 +486,8 @@ enum StatusConta {
 
 model ContaPagar {
   id             String      @id @default(uuid())
+  empresaId      Int
+  empresa        Empresa     @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   descricao      String
   categoria      String
   valor          Decimal
@@ -376,6 +501,8 @@ model ContaPagar {
 
 model ContaReceber {
   id              String      @id @default(uuid())
+  empresaId       Int
+  empresa         Empresa     @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   descricao       String
   valor           Decimal
   dataVencimento  DateTime

@@ -9,20 +9,24 @@ import {
   Delete,
   UseGuards,
   ParseIntPipe,
+  Req,
 } from '@nestjs/common';
 import { ProdutosService } from './produtos.service';
 import { CreateProdutoDto } from './dto/create-produto.dto';
 import { UpdateProdutoDto } from './dto/update-produto.dto';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { JwtAuthGuard } from '../core/auth/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard)
 @Controller('produtos')
 export class ProdutosController {
   constructor(private readonly produtosService: ProdutosService) {}
 
+  // src/produtos/produtos.controller.ts
   @Post()
-  create(@Body() createProdutoDto: CreateProdutoDto) {
-    return this.produtosService.create(createProdutoDto);
+  create(@Body() createProdutoDto: CreateProdutoDto, @Req() req: any) {
+  // Extrai empresaId do token JWT do usuário ou usa 1 como padrão
+  const empresaId = req.user?.empresaId ?? 1;
+  return this.produtosService.create(createProdutoDto, empresaId);
   }
 
   @Get()

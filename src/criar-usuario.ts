@@ -7,11 +7,13 @@ async function main() {
   const senhaHash = await bcrypt.hash('123456', 10);
 
   // 1. Cria o funcionário (forçando a conversão de tipo para ignorar o cache do TS)
+    // src/criar-usuario.ts
   const funcionario = await prisma.funcionario.create({
     data: {
       nome: 'Administrador Bebfy',
       cpf: '00000000000',
-      cargo: 'ADMINISTRADOR' as any,
+      cargo: 'ADMINISTRADOR', // Precisa ser um valor válido do Enum Cargo
+      empresaId: 1,
     },
   });
 

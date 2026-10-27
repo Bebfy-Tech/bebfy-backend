@@ -4,18 +4,21 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateProdutoDto } from './dto/create-produto.dto';
 import { UpdateProdutoDto } from './dto/update-produto.dto';
 // Importamos o PrismaService
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '../core/prisma/prisma.service';
 
 @Injectable()
 export class ProdutosService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Cria um novo produto no banco de dados
-  async create(createProdutoDto: CreateProdutoDto) {
-    return this.prisma.produto.create({
-      data: createProdutoDto,
-    });
-  }
+// src/produtos/produtos.service.ts
+async create(createProdutoDto: CreateProdutoDto, empresaId: number) {
+  return this.prisma.produto.create({
+    data: {
+      ...createProdutoDto,
+      empresaId, // Adicionado para atender o Multi-tenancy
+    },
+  });
+}
 
   // Busca todos os produtos cadastrados
   async findAll() {

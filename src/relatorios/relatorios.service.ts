@@ -1,12 +1,12 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '../core/prisma/prisma.service';
 import { StatusCaixa, StatusVenda } from '@prisma/client';
 
 @Injectable()
 export class RelatoriosService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getDashboard() {
+  async getDashboard(empresaId: number) {
     try {
       const hojeInicio = new Date();
       hojeInicio.setHours(0, 0, 0, 0);
@@ -17,9 +17,10 @@ export class RelatoriosService {
         1,
       );
 
-      // 1. Total faturado hoje em vendas concluídas
+      // 1. Total faturado hoje em vendas concluídas para a empresa logada
       const vendasHoje = await this.prisma.venda.aggregate({
         where: {
+          empresaId,
           status: StatusVenda.CONCLUIDA,
           criadoEm: { gte: hojeInicio },
         },
@@ -27,9 +28,10 @@ export class RelatoriosService {
         _count: { id: true },
       });
 
-      // 2. Total faturado no mês corrente
+      // 2. Total faturado no mês corrente para a empresa logada
       const vendasMes = await this.prisma.venda.aggregate({
         where: {
+          empresaId,
           status: StatusVenda.CONCLUIDA,
           criadoEm: { gte: inicioMes },
         },
@@ -37,15 +39,24 @@ export class RelatoriosService {
         _count: { id: true },
       });
 
-      // 3. Total pendente em Fiados a receber
+      // 3. Total pendente em Fiados a receber da empresa logada
       const fiadosPendentes = await this.prisma.cliente.aggregate({
+        where: {
+          empresaId,
+        },
         _sum: { saldoDevedor: true },
         _count: { id: true },
       });
 
-      // 4. Top 5 produtos mais vendidos
+      // 4. Top 5 produtos mais vendidos nas vendas concluídas da empresa
       const topProdutos = await this.prisma.itemVenda.groupBy({
         by: ['produtoId'],
+        where: {
+          venda: {
+            empresaId,
+            status: StatusVenda.CONCLUIDA,
+          },
+        },
         _sum: { quantidade: true, precoTotal: true },
         orderBy: {
           _sum: { quantidade: 'desc' },
@@ -55,8 +66,8 @@ export class RelatoriosService {
 
       const topProdutosDetalhados = await Promise.all(
         topProdutos.map(async (item) => {
-          const produto = await this.prisma.produto.findUnique({
-            where: { id: item.produtoId },
+          const produto = await this.prisma.produto.findFirst({
+            where: { id: item.produtoId, empresaId },
             select: {
               id: true,
               nome: true,
@@ -74,9 +85,12 @@ export class RelatoriosService {
         }),
       );
 
-      // 5. Status dos Caixas Abertos
+      // 5. Status dos Caixas Abertos da empresa logada
       const caixasAbertos = await this.prisma.caixa.findMany({
-        where: { status: StatusCaixa.ABERTO },
+        where: {
+          empresaId,
+          status: StatusCaixa.ABERTO,
+        },
         include: {
           operador: { select: { id: true, nome: true } },
         },
