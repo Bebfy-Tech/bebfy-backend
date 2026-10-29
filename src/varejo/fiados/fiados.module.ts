@@ -7,5 +7,6 @@ import { PrismaModule } from '../../core/prisma/prisma.module';
   imports: [PrismaModule],
   controllers: [FiadosController],
   providers: [FiadosService],
+  exports: [FiadosService],
 })
 export class FiadosModule {}

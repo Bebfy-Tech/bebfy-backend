@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsEnum,
   IsNotEmpty,
   IsNumber,
@@ -8,9 +9,37 @@ import {
   IsString,
   ValidateNested,
 } from 'class-validator';
-import { TipoEntrega } from '@prisma/client';
-import { CreateItemVendaDto } from './create-item-venda.dto';
-import { CreatePagamentoVendaDto } from './create-pagamento-venda.dto';
+import { FormaPagamento, TipoEntrega } from '@prisma/client';
+
+export class CreateItemVendaDto {
+  @IsNumber({}, { message: 'O ID do produto deve ser um número.' })
+  @IsNotEmpty({ message: 'O ID do produto é obrigatório.' })
+  produtoId: number;
+
+  @IsNumber({}, { message: 'A quantidade deve ser um número.' })
+  @IsNotEmpty({ message: 'A quantidade é obrigatória.' })
+  quantidade: number;
+
+  @IsNumber({}, { message: 'O preço unitário deve ser um número.' })
+  @IsNotEmpty({ message: 'O preço unitário é obrigatório.' })
+  precoUnitario: number;
+
+  @IsOptional()
+  @IsBoolean({ message: 'isFardo deve ser verdadeiro ou falso.' })
+  isFardo?: boolean;
+}
+
+export class CreatePagamentoVendaDto {
+  @IsEnum(FormaPagamento, { message: 'Forma de pagamento inválida.' })
+  formaPagamento: FormaPagamento;
+
+  @IsNumber({}, { message: 'O valor do pagamento deve ser um número.' })
+  valor: number;
+
+  @IsOptional()
+  @IsNumber({}, { message: 'O troco deve ser um número.' })
+  troco?: number;
+}
 
 export class CreateVendaDto {
   @IsString({ message: 'O ID do caixa deve ser um texto/UUID.' })
@@ -40,6 +69,10 @@ export class CreateVendaDto {
   @IsString({ message: 'O endereço de entrega deve ser um texto.' })
   @IsOptional()
   enderecoEntrega?: string;
+
+  @IsOptional()
+  @IsNumber({}, { message: 'A quantidade de cascos devolvidos deve ser um número.' })
+  cascosDevolvidos?: number;
 
   @IsArray({ message: 'Os itens devem ser uma lista.' })
   @ValidateNested({ each: true })

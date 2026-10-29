@@ -1,16 +1,15 @@
-// Importamos os decoradores e exceções padrão do NestJS
 import {
   Injectable,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-// Importamos o PrismaService e os Enums de regras de negócio
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CreateVendaDto } from './dto/create-venda.dto';
 import {
   FormaPagamento,
   StatusCaixa,
   StatusVenda,
+  StatusAcerto,
   TipoTransacaoFiado,
 } from '@prisma/client';
 
@@ -18,57 +17,61 @@ import {
 export class VendasService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Processa uma nova venda completa com transação atômica no banco de dados e suporte Multi-tenant
-  async create(createVendaDto: CreateVendaDto, empresaId: number = 1) {
-    // 1. Valida se o Caixa informado existe e se está ABERTO
+  async create(createVendaDto: CreateVendaDto, empresaId: number) {
     const caixa = await this.prisma.caixa.findUnique({
       where: { id: createVendaDto.caixaId },
       include: { operador: true },
     });
 
-    if (!caixa) {
-      throw new NotFoundException('Caixa informado não foi encontrado.');
+    if (!caixa || caixa.empresaId !== empresaId) {
+      throw new NotFoundException('Caixa informado não foi encontrado nesta empresa.');
     }
 
     if (caixa.status !== StatusCaixa.ABERTO) {
       throw new BadRequestException('Não é possível realizar vendas em um caixa FECHADO.');
     }
 
-    // 2. Valida o Funcionário dentro da mesma empresa
     const funcionario = await this.prisma.funcionario.findFirst({
-      where: { id: createVendaDto.funcionarioId, empresaId },
+      where: { id: createVendaDto.funcionarioId, empresaId, ativo: true },
     });
 
     if (!funcionario) {
       throw new NotFoundException('Funcionário não encontrado nesta empresa.');
     }
 
-    // 3. Valida os Produtos e o Estoque disponível na empresa
     let subtotal = 0;
+    let totalCascosNovos = 0;
+
     for (const item of createVendaDto.itens) {
       const produto = await this.prisma.produto.findFirst({
-        where: { id: item.produtoId, empresaId },
+        where: { id: item.produtoId, empresaId, ativo: true },
       });
 
       if (!produto) {
         throw new NotFoundException(`Produto ID ${item.produtoId} não encontrado nesta empresa.`);
       }
 
-      if (produto.estoqueAtual < item.quantidade) {
+      const unidadesParaAbater = item.isFardo
+        ? item.quantidade * (produto.fardoQuantidade || 1)
+        : item.quantidade;
+
+      if (produto.estoqueAtual < unidadesParaAbater) {
         throw new BadRequestException(
-          `Estoque insuficiente para o produto "${produto.nome}". Disponível: ${produto.estoqueAtual}, Solicitado: ${item.quantidade}`,
+          `Estoque insuficiente para "${produto.nome}". Disponível: ${produto.estoqueAtual}, Solicitado: ${unidadesParaAbater}`,
         );
+      }
+
+      if (produto.retornavel) {
+        totalCascosNovos += unidadesParaAbater;
       }
 
       subtotal += item.quantidade * Number(item.precoUnitario);
     }
 
-    // 4. Calcula o Valor Total da Venda
     const desconto = Number(createVendaDto.desconto || 0);
     const taxaEntrega = Number(createVendaDto.taxaEntrega || 0);
     const valorTotal = subtotal - desconto + taxaEntrega;
 
-    // 5. Verifica se há pagamento na modalidade FIADO e realiza as validações de cliente e limite
     const pagamentoFiado = createVendaDto.pagamentos.find(
       (p) => p.formaPagamento === FormaPagamento.FIADO,
     );
@@ -81,7 +84,7 @@ export class VendasService {
       }
 
       const cliente = await this.prisma.cliente.findFirst({
-        where: { id: createVendaDto.clienteId, empresaId } as any,
+        where: { id: createVendaDto.clienteId, empresaId, ativo: true },
       });
 
       if (!cliente) {
@@ -101,9 +104,11 @@ export class VendasService {
       }
     }
 
-    // 6. Executa a gravação da Venda, Itens, Pagamentos, Baixa no Estoque e Fiado dentro de uma transação
+    const statusAcerto = createVendaDto.tipoEntrega === 'DELIVERY'
+      ? StatusAcerto.PENDENTE
+      : StatusAcerto.CONCLUIDO;
+
     return this.prisma.$transaction(async (tx) => {
-      // 6.1 Cria o registro principal da Venda associado à Empresa
       const venda = await tx.venda.create({
         data: {
           caixaId: createVendaDto.caixaId,
@@ -116,12 +121,17 @@ export class VendasService {
           enderecoEntrega: createVendaDto.enderecoEntrega,
           tipoEntrega: createVendaDto.tipoEntrega || 'RETIRADA_BALCAO',
           status: StatusVenda.CONCLUIDA,
+          statusAcerto,
           empresaId,
-        } as any,
+        },
       });
 
-      // 6.2 Registra os Itens da Venda e dá Baixa no Estoque dos Produtos
       for (const item of createVendaDto.itens) {
+        const produto = await tx.produto.findUnique({ where: { id: item.produtoId } });
+        const unidadesParaAbater = item.isFardo
+          ? item.quantidade * (produto.fardoQuantidade || 1)
+          : item.quantidade;
+
         await tx.itemVenda.create({
           data: {
             vendaId: venda.id,
@@ -132,18 +142,16 @@ export class VendasService {
           },
         });
 
-        // Abate do estoque do produto
         await tx.produto.update({
           where: { id: item.produtoId },
           data: {
             estoqueAtual: {
-              decrement: item.quantidade,
+              decrement: unidadesParaAbater,
             },
           },
         });
       }
 
-      // 6.3 Registra os Pagamentos da Venda
       for (const pag of createVendaDto.pagamentos) {
         await tx.pagamentoVenda.create({
           data: {
@@ -155,10 +163,22 @@ export class VendasService {
         });
       }
 
-      // 6.4 Se houver fiado, atualiza o saldo do cliente e cria o histórico de débito
+      if (createVendaDto.clienteId && (totalCascosNovos > 0 || createVendaDto.cascosDevolvidos)) {
+        const cascosDevolvidos = createVendaDto.cascosDevolvidos || 0;
+        const variacaoCascos = totalCascosNovos - cascosDevolvidos;
+
+        await tx.cliente.update({
+          where: { id: createVendaDto.clienteId },
+          data: {
+            cascosEmPosse: {
+              increment: variacaoCascos,
+            },
+          },
+        });
+      }
+
       if (pagamentoFiado && createVendaDto.clienteId) {
         const valorFiado = Number(pagamentoFiado.valor);
-
         const clienteAtual = await tx.cliente.findUnique({
           where: { id: createVendaDto.clienteId },
         });
@@ -182,7 +202,6 @@ export class VendasService {
         });
       }
 
-      // Retorna a venda completa com seus relacionamentos
       return tx.venda.findUnique({
         where: { id: venda.id },
         include: {
@@ -195,10 +214,46 @@ export class VendasService {
     });
   }
 
-  // Lista todas as vendas realizadas na empresa
-  async findAll(empresaId: number = 1) {
+  async listarPendentesAcertoDelivery(empresaId: number) {
+    const vendas = await this.prisma.venda.findMany({
+      where: {
+        empresaId,
+        tipoEntrega: 'DELIVERY',
+        statusAcerto: StatusAcerto.PENDENTE,
+        status: StatusVenda.CONCLUIDA,
+      },
+      include: {
+        cliente: true,
+        funcionario: true,
+        pagamentos: true,
+      },
+      orderBy: { criadoEm: 'desc' },
+    });
+
+    const totalPendentes = vendas.reduce((acc, v) => acc + Number(v.valorTotal), 0);
+
+    return {
+      quantidade: vendas.length,
+      totalPendentes,
+      vendas,
+    };
+  }
+
+  async confirmarAcertoDelivery(vendaIds: string[], empresaId: number) {
+    return this.prisma.venda.updateMany({
+      where: {
+        id: { in: vendaIds },
+        empresaId,
+      },
+      data: {
+        statusAcerto: StatusAcerto.CONCLUIDO,
+      },
+    });
+  }
+
+  async findAll(empresaId: number) {
     return this.prisma.venda.findMany({
-      where: { empresaId } as any,
+      where: { empresaId },
       include: {
         itens: { include: { produto: true } },
         pagamentos: true,
@@ -209,10 +264,9 @@ export class VendasService {
     });
   }
 
-  // Busca uma venda específica pelo ID garantindo isolamento de tenant
-  async findOne(id: string, empresaId: number = 1) {
+  async findOne(id: string, empresaId: number) {
     const venda = await this.prisma.venda.findFirst({
-      where: { id, empresaId } as any,
+      where: { id, empresaId },
       include: {
         itens: { include: { produto: true } },
         pagamentos: true,
@@ -229,8 +283,7 @@ export class VendasService {
     return venda;
   }
 
-  // Cancela uma venda, estorna o estoque dos produtos e reverte débitos no Fiado (se houver)
-  async cancelarVenda(id: string, empresaId: number = 1) {
+  async cancelarVenda(id: string, empresaId: number) {
     const venda = await this.findOne(id, empresaId);
 
     if (venda.status === StatusVenda.CANCELADA) {
@@ -238,7 +291,6 @@ export class VendasService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // 1. Estorna/Devolve a quantidade dos produtos ao estoque
       for (const item of venda.itens) {
         await tx.produto.update({
           where: { id: item.produtoId },
@@ -250,27 +302,23 @@ export class VendasService {
         });
       }
 
-      // 2. Se a venda teve pagamento no FIADO, estorna o débito da conta do cliente
       const pagamentoFiado = venda.pagamentos.find(
         (p) => p.formaPagamento === FormaPagamento.FIADO,
       );
 
       if (pagamentoFiado && venda.clienteId) {
         const valorFiado = Number(pagamentoFiado.valor);
-
         const clienteAtual = await tx.cliente.findUnique({
           where: { id: venda.clienteId },
         });
 
         const novoSaldo = Math.max(0, Number(clienteAtual.saldoDevedor) - valorFiado);
 
-        // Subtrai o valor do saldo devedor do cliente
         await tx.cliente.update({
           where: { id: venda.clienteId },
           data: { saldoDevedor: novoSaldo },
         });
 
-        // Registra o estorno no Histórico do Fiado
         await tx.historicoFiado.create({
           data: {
             clienteId: venda.clienteId,
@@ -283,7 +331,6 @@ export class VendasService {
         });
       }
 
-      // 3. Atualiza o status da venda para CANCELADA
       return tx.venda.update({
         where: { id },
         data: { status: StatusVenda.CANCELADA },

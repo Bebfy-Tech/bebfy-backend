@@ -1,26 +1,23 @@
-// Importamos os decoradores e exceções padrão do NestJS
 import {
   Injectable,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-// Importamos o PrismaService e o Enum de transações
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CreateFiadoDto } from './dto/create-fiado.dto';
-import { TipoTransacaoFiado } from '@prisma/client';
+import { PagarFiadoDto } from './dto/pagar-fiado.dto';
+import { TipoTransacaoFiado, TipoMovimentacaoCaixa } from '@prisma/client';
 
 @Injectable()
 export class FiadosService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Lança um novo registro no histórico do fiado e atualiza o saldo do cliente de forma atômica
   async create(createFiadoDto: CreateFiadoDto) {
-    // 1. Localiza o cliente na base de dados
     const cliente = await this.prisma.cliente.findUnique({
       where: { id: createFiadoDto.clienteId },
     });
 
-    if (!cliente) {
+    if (!cliente || !cliente.ativo) {
       throw new NotFoundException('O cliente informado não foi encontrado.');
     }
 
@@ -28,7 +25,6 @@ export class FiadosService {
     const saldoAtual = Number(cliente.saldoDevedor);
     const limiteCredito = Number(cliente.limiteCredito);
 
-    // 2. Validação de Limite de Crédito para compras/débitos novos
     if (createFiadoDto.tipo === TipoTransacaoFiado.DEBITO) {
       const saldoProjetado = saldoAtual + valorNum;
       if (limiteCredito > 0 && saldoProjetado > limiteCredito) {
@@ -42,17 +38,14 @@ export class FiadosService {
       }
     }
 
-    // 3. Executa a atualização de saldo e inserção no histórico em uma transação do banco de dados
     return this.prisma.$transaction(async (tx) => {
-      // Calcula o novo saldo após o lançamento
       let novoSaldo = saldoAtual;
       if (createFiadoDto.tipo === TipoTransacaoFiado.CREDITO) {
-        novoSaldo -= valorNum; // Abate da dívida
+        novoSaldo -= valorNum;
       } else {
-        novoSaldo += valorNum; // Incrementa a dívida
+        novoSaldo += valorNum;
       }
 
-      // Atualiza o saldoDevedor no cadastro do cliente
       await tx.cliente.update({
         where: { id: createFiadoDto.clienteId },
         data: {
@@ -60,7 +53,6 @@ export class FiadosService {
         },
       });
 
-      // Cria o registro no histórico de fiados guardando o saldoApos
       return tx.historicoFiado.create({
         data: {
           clienteId: createFiadoDto.clienteId,
@@ -74,9 +66,67 @@ export class FiadosService {
     });
   }
 
-  // Lista todos os lançamentos de fiado cadastrados na distribuidora
-  async findAll() {
+  async registrarPagamento(clienteId: string, dto: PagarFiadoDto, empresaId: number) {
+    return this.prisma.$transaction(async (tx) => {
+      const cliente = await tx.cliente.findFirst({
+        where: { id: clienteId, empresaId, ativo: true },
+      });
+
+      if (!cliente) {
+        throw new NotFoundException('Cliente não encontrado nesta empresa.');
+      }
+
+      const valorNum = Number(dto.valor);
+      const novoSaldo = Math.max(0, Number(cliente.saldoDevedor) - valorNum);
+
+      await tx.cliente.update({
+        where: { id: clienteId },
+        data: { saldoDevedor: novoSaldo },
+      });
+
+      const historico = await tx.historicoFiado.create({
+        data: {
+          clienteId,
+          tipo: TipoTransacaoFiado.CREDITO,
+          valor: dto.valor,
+          descricao: `Baixa de fiado no balcão - Forma: ${dto.formaPagamento}`,
+          saldoApos: novoSaldo,
+        },
+      });
+
+      if (dto.caixaId) {
+        const caixa = await tx.caixa.findFirst({
+          where: { id: dto.caixaId, empresaId, status: 'ABERTO' },
+        });
+
+        if (caixa) {
+          await tx.movimentacaoCaixa.create({
+            data: {
+              caixaId: dto.caixaId,
+              tipo: TipoMovimentacaoCaixa.SUPRIMENTO,
+              valor: dto.valor,
+              categoria: 'RECEBIMENTO_FIADO',
+              observacao: `Recebimento de fiado do cliente ${cliente.nome} (${dto.formaPagamento})`,
+            },
+          });
+        }
+      }
+
+      return {
+        sucesso: true,
+        saldoDevedorAtual: novoSaldo,
+        historico,
+      };
+    });
+  }
+
+  async findAll(empresaId: number) {
     return this.prisma.historicoFiado.findMany({
+      where: {
+        cliente: {
+          empresaId,
+        },
+      },
       include: {
         cliente: true,
         venda: true,
@@ -87,14 +137,13 @@ export class FiadosService {
     });
   }
 
-  // Busca o extrato/histórico completo de fiados de um único cliente
-  async findByCliente(clienteId: string) {
-    const cliente = await this.prisma.cliente.findUnique({
-      where: { id: clienteId },
+  async findByCliente(clienteId: string, empresaId: number) {
+    const cliente = await this.prisma.cliente.findFirst({
+      where: { id: clienteId, empresaId, ativo: true },
     });
 
     if (!cliente) {
-      throw new NotFoundException('Cliente não encontrado.');
+      throw new NotFoundException('Cliente não encontrado nesta empresa.');
     }
 
     return this.prisma.historicoFiado.findMany({

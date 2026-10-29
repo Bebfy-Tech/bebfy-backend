@@ -1,4 +1,3 @@
-// Importamos os decoradores HTTP do NestJS e a proteção por JWT
 import {
   Controller,
   Get,
@@ -11,33 +10,46 @@ import {
 import { VendasService } from './vendas.service';
 import { CreateVendaDto } from './dto/create-venda.dto';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
+import { CurrentEmpresa } from '../../core/auth/decorators/current-empresa.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('vendas')
 export class VendasController {
   constructor(private readonly vendasService: VendasService) {}
 
-  // POST /vendas -> Processa uma nova venda no PDV
   @Post()
-  create(@Body() createVendaDto: CreateVendaDto) {
-    return this.vendasService.create(createVendaDto);
+  create(
+    @Body() createVendaDto: CreateVendaDto,
+    @CurrentEmpresa() empresaId: number,
+  ) {
+    return this.vendasService.create(createVendaDto, empresaId);
   }
 
-  // GET /vendas -> Lista o histórico de vendas
+  @Get('delivery/pendentes-acerto')
+  listarPendentesAcertoDelivery(@CurrentEmpresa() empresaId: number) {
+    return this.vendasService.listarPendentesAcertoDelivery(empresaId);
+  }
+
+  @Patch('delivery/confirmar-acerto')
+  confirmarAcertoDelivery(
+    @Body('vendaIds') vendaIds: string[],
+    @CurrentEmpresa() empresaId: number,
+  ) {
+    return this.vendasService.confirmarAcertoDelivery(vendaIds, empresaId);
+  }
+
   @Get()
-  findAll() {
-    return this.vendasService.findAll();
+  findAll(@CurrentEmpresa() empresaId: number) {
+    return this.vendasService.findAll(empresaId);
   }
 
-  // GET /vendas/:id -> Detalha uma venda pelo ID
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.vendasService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentEmpresa() empresaId: number) {
+    return this.vendasService.findOne(id, empresaId);
   }
 
-  // PATCH /vendas/:id/cancelar -> Cancela a venda e devolve o estoque
   @Patch(':id/cancelar')
-  cancelarVenda(@Param('id') id: string) {
-    return this.vendasService.cancelarVenda(id);
+  cancelarVenda(@Param('id') id: string, @CurrentEmpresa() empresaId: number) {
+    return this.vendasService.cancelarVenda(id, empresaId);
   }
 }

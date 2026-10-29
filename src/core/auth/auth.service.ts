@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { LoginDto } from './dto/login.dto';
+import { ValidarGerenteDto } from './dto/validar-gerente.dto';
 
 @Injectable()
 export class AuthService {
@@ -12,9 +13,20 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto, empresaId?: number) {
-    // 1. Busca o usuário incluindo os dados do Funcionário e da Empresa
-    const usuario = await this.prisma.usuario.findUnique({
-      where: { email: dto.email },
+    const codigoNumero = Number(dto.login);
+    const isNumero = !isNaN(codigoNumero);
+
+    const usuario = await this.prisma.usuario.findFirst({
+      where: {
+        ativo: true,
+        funcionario: {
+          ativo: true,
+          OR: [
+            ...(isNumero ? [{ codigo: codigoNumero }] : []),
+            { cpf: dto.login },
+          ],
+        },
+      },
       include: {
         funcionario: {
           include: {
@@ -25,25 +37,20 @@ export class AuthService {
     });
 
     if (!usuario || !usuario.funcionario) {
-      throw new UnauthorizedException('E-mail ou senha incorretos.');
+      throw new UnauthorizedException('Código do funcionário ou senha incorretos.');
     }
 
-    // 2. Se a requisição veio de um subdomínio específico, valida se o usuário pertence a essa empresa
     if (empresaId && usuario.funcionario.empresaId !== empresaId) {
-      throw new UnauthorizedException(
-        'Usuário não possui acesso a esta empresa.',
-      );
+      throw new UnauthorizedException('Usuário não possui acesso a esta empresa.');
     }
 
-    // 3. Valida a senha com hash via bcrypt
     const senhaValida = await bcrypt.compare(dto.senha, usuario.senha);
     if (!senhaValida) {
-      throw new UnauthorizedException('E-mail ou senha incorretos.');
+      throw new UnauthorizedException('Código do funcionário ou senha incorretos.');
     }
 
     const empresa = usuario.funcionario.empresa;
 
-    // 4. Monta o payload do JWT com as informações multi-tenant
     const payload = {
       sub: usuario.id,
       email: usuario.email,
@@ -51,9 +58,9 @@ export class AuthService {
       subdominio: empresa.subdominio || empresa.slug,
       funcionarioId: usuario.funcionarioId,
       cargo: usuario.funcionario.cargo,
+      codigoFuncionario: usuario.funcionario.codigo,
     };
 
-    // 5. Retorna o token assinado e as informações da sessão
     return {
       access_token: await this.jwtService.signAsync(payload),
       empresa: {
@@ -63,11 +70,54 @@ export class AuthService {
       },
       usuario: {
         id: usuario.id,
-        email: usuario.email,
+        codigo: usuario.funcionario.codigo,
         nome: usuario.funcionario.nome,
         cargo: usuario.funcionario.cargo,
         funcionarioId: usuario.funcionarioId,
       },
+    };
+  }
+
+  async validarGerente(dto: ValidarGerenteDto, empresaId: number) {
+    const codigoNumero = Number(dto.login);
+    const isNumero = !isNaN(codigoNumero);
+
+    const usuario = await this.prisma.usuario.findFirst({
+      where: {
+        ativo: true,
+        funcionario: {
+          empresaId,
+          ativo: true,
+          OR: [
+            ...(isNumero ? [{ codigo: codigoNumero }] : []),
+            { cpf: dto.login },
+          ],
+        },
+      },
+      include: {
+        funcionario: true,
+      },
+    });
+
+    if (!usuario || !usuario.funcionario) {
+      throw new UnauthorizedException('Gerente/Admin não encontrado com este código.');
+    }
+
+    const cargosAutorizados = ['GERENTE', 'ADMINISTRADOR', 'PROPRIETARIO'];
+    if (!cargosAutorizados.includes(usuario.funcionario.cargo)) {
+      throw new UnauthorizedException('Usuário informado não possui nível de acesso de Gerente/Admin.');
+    }
+
+    const senhaValida = await bcrypt.compare(dto.senha, usuario.senha);
+    if (!senhaValida) {
+      throw new UnauthorizedException('Senha de autorização incorreta.');
+    }
+
+    return {
+      autorizado: true,
+      gerenteId: usuario.id,
+      codigoGerente: usuario.funcionario.codigo,
+      nomeGerente: usuario.funcionario.nome,
     };
   }
 }

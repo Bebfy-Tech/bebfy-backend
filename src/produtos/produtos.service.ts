@@ -1,28 +1,27 @@
-// Importamos os decoradores e exceções do NestJS
 import { Injectable, NotFoundException } from '@nestjs/common';
-// Importamos os DTOs de criação e atualização
 import { CreateProdutoDto } from './dto/create-produto.dto';
 import { UpdateProdutoDto } from './dto/update-produto.dto';
-// Importamos o PrismaService
 import { PrismaService } from '../core/prisma/prisma.service';
 
 @Injectable()
 export class ProdutosService {
   constructor(private readonly prisma: PrismaService) {}
 
-// src/produtos/produtos.service.ts
-async create(createProdutoDto: CreateProdutoDto, empresaId: number) {
-  return this.prisma.produto.create({
-    data: {
-      ...createProdutoDto,
-      empresaId, // Adicionado para atender o Multi-tenancy
-    },
-  });
-}
+  async create(createProdutoDto: CreateProdutoDto, empresaId: number) {
+    return this.prisma.produto.create({
+      data: {
+        ...createProdutoDto,
+        empresaId,
+      },
+    });
+  }
 
-  // Busca todos os produtos cadastrados
-  async findAll() {
+  async findAll(empresaId: number) {
     return this.prisma.produto.findMany({
+      where: {
+        empresaId,
+        ativo: true,
+      },
       include: {
         categoria: true,
         lotes: true,
@@ -33,10 +32,9 @@ async create(createProdutoDto: CreateProdutoDto, empresaId: number) {
     });
   }
 
-  // Busca um produto pelo ID numérico sequencial (ex: 1, 2, 3)
-  async findOne(id: number) {
-    const produto = await this.prisma.produto.findUnique({
-      where: { id },
+  async findOne(id: number, empresaId: number) {
+    const produto = await this.prisma.produto.findFirst({
+      where: { id, empresaId, ativo: true },
       include: {
         categoria: true,
         lotes: true,
@@ -50,9 +48,77 @@ async create(createProdutoDto: CreateProdutoDto, empresaId: number) {
     return produto;
   }
 
-  // Atualiza um produto pelo ID numérico
-  async update(id: number, updateProdutoDto: UpdateProdutoDto) {
-    await this.findOne(id);
+  async buscarPorCodigoBarras(codigo: string, empresaId: number) {
+    const produto = await this.prisma.produto.findFirst({
+      where: {
+        codigoBarras: codigo,
+        empresaId,
+        ativo: true,
+      },
+      select: {
+        id: true,
+        nome: true,
+        codigoBarras: true,
+        precoVendaVarejo: true,
+        precoVendaAtacado: true,
+        fardoQuantidade: true,
+        retornavel: true,
+        estoqueAtual: true,
+      },
+    });
+
+    if (!produto) {
+      throw new NotFoundException('Produto não encontrado pelo código de barras.');
+    }
+
+    return produto;
+  }
+
+  async buscarInteligente(termo: string, empresaId: number) {
+    const produtoPorCodigo = await this.prisma.produto.findFirst({
+      where: {
+        codigoBarras: termo,
+        empresaId,
+        ativo: true,
+      },
+      select: {
+        id: true,
+        nome: true,
+        codigoBarras: true,
+        precoVendaVarejo: true,
+        precoVendaAtacado: true,
+        fardoQuantidade: true,
+        retornavel: true,
+        estoqueAtual: true,
+      },
+    });
+
+    if (produtoPorCodigo) {
+      return [produtoPorCodigo];
+    }
+
+    return this.prisma.produto.findMany({
+      where: {
+        nome: { contains: termo, mode: 'insensitive' },
+        empresaId,
+        ativo: true,
+      },
+      take: 15,
+      select: {
+        id: true,
+        nome: true,
+        codigoBarras: true,
+        precoVendaVarejo: true,
+        precoVendaAtacado: true,
+        fardoQuantidade: true,
+        retornavel: true,
+        estoqueAtual: true,
+      },
+    });
+  }
+
+  async update(id: number, updateProdutoDto: UpdateProdutoDto, empresaId: number) {
+    await this.findOne(id, empresaId);
 
     return this.prisma.produto.update({
       where: { id },
@@ -60,12 +126,12 @@ async create(createProdutoDto: CreateProdutoDto, empresaId: number) {
     });
   }
 
-  // Remove um produto pelo ID numérico
-  async remove(id: number) {
-    await this.findOne(id);
+  async remove(id: number, empresaId: number) {
+    await this.findOne(id, empresaId);
 
-    return this.prisma.produto.delete({
+    return this.prisma.produto.update({
       where: { id },
+      data: { ativo: false },
     });
   }
 }

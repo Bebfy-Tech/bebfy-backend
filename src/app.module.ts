@@ -1,4 +1,6 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 
 // Middleware Tenant Multi-tenant
 import { TenantMiddleware } from './core/tenant/tenant.middleware';
@@ -26,6 +28,14 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
 
 @Module({
   imports: [
+    // Rate Limiting: Limita a 100 requisições a cada 60 segundos por IP
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 100,
+      },
+    ]),
+
     // Core
     PrismaModule,
     AuthModule,
@@ -46,6 +56,12 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
 
     // Relatórios
     RelatoriosModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule implements NestModule {

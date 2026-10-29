@@ -4,9 +4,9 @@ import { ProdutosController } from './produtos.controller';
 import { PrismaModule } from '../core/prisma/prisma.module';
 
 @Module({
-  // Importa o PrismaModule para disponibilizar a conexão com a base de dados no ProdutosService
   imports: [PrismaModule],
   controllers: [ProdutosController],
   providers: [ProdutosService],
+  exports: [ProdutosService],
 })
 export class ProdutosModule {}
