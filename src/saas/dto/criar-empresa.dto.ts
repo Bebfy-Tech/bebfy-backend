@@ -1,0 +1,27 @@
+import { IsEmail, IsInt, IsNotEmpty, IsString } from 'class-validator';
+
+export class CriarEmpresaDto {
+  @IsString({ message: 'O nome da empresa deve ser um texto.' })
+  @IsNotEmpty({ message: 'O nome da empresa é obrigatório.' })
+  nome: string;
+
+  @IsString({ message: 'O documento (CNPJ) deve ser um texto.' })
+  @IsNotEmpty({ message: 'O documento (CNPJ) é obrigatório.' })
+  documento: string;
+
+  @IsString({ message: 'O subdomínio deve ser um texto.' })
+  @IsNotEmpty({ message: 'O subdomínio é obrigatório.' })
+  subdominio: string;
+
+  @IsEmail({}, { message: 'E-mail inválido.' })
+  @IsNotEmpty({ message: 'O e-mail é obrigatório.' })
+  email: string;
+
+  @IsString({ message: 'O telefone deve ser um texto.' })
+  @IsNotEmpty({ message: 'O telefone é obrigatório.' })
+  telefone: string;
+
+  @IsInt({ message: 'O ID do plano deve ser um número inteiro.' })
+  @IsNotEmpty({ message: 'O ID do plano inicial é obrigatório.' })
+  planoId: number;
+}

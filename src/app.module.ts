@@ -10,6 +10,7 @@ import { PrismaModule } from './core/prisma/prisma.module';
 import { AuthModule } from './core/auth/auth.module';
 import { FuncionariosModule } from './core/funcionarios/funcionarios.module';
 
+
 // Varejo / PDV
 import { CaixaModule } from './varejo/caixa/caixa.module';
 import { VendasModule } from './varejo/vendas/vendas.module';

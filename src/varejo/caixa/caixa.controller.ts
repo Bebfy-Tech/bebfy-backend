@@ -1,4 +1,3 @@
-// Importamos os decoradores HTTP do NestJS e a proteção por JWT
 import {
   Controller,
   Get,
@@ -13,51 +12,65 @@ import { AbrirCaixaDto } from './dto/abrir-caixa.dto';
 import { FecharCaixaDto } from './dto/fechar-caixa.dto';
 import { MovimentacaoCaixaDto } from './dto/movimentacao-caixa.dto';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
+import { CurrentEmpresa } from '../../core/auth/decorators/current-empresa.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('caixa')
 export class CaixaController {
   constructor(private readonly caixaService: CaixaService) {}
 
-  // POST /caixa/abrir -> Abre um novo caixa para o operador
   @Post('abrir')
-  abrirCaixa(@Body() abrirCaixaDto: AbrirCaixaDto) {
-    return this.caixaService.abrirCaixa(abrirCaixaDto);
+  abrirCaixa(
+    @Body() abrirCaixaDto: AbrirCaixaDto,
+    @CurrentEmpresa() empresaId: number,
+  ) {
+    return this.caixaService.abrirCaixa(abrirCaixaDto, empresaId);
   }
 
-  // POST /caixa/:id/movimentacao -> Registra Sangria ou Suprimento
   @Post(':id/movimentacao')
   adicionarMovimentacao(
     @Param('id') id: string,
     @Body() movimentacaoDto: MovimentacaoCaixaDto,
+    @CurrentEmpresa() empresaId: number,
   ) {
-    return this.caixaService.adicionarMovimentacao(id, movimentacaoDto);
+    return this.caixaService.adicionarMovimentacao(id, movimentacaoDto, empresaId);
   }
 
-  // PATCH /caixa/:id/fechar -> Realiza o fechamento cego/físico do caixa
   @Patch(':id/fechar')
   fecharCaixa(
     @Param('id') id: string,
     @Body() fecharCaixaDto: FecharCaixaDto,
+    @CurrentEmpresa() empresaId: number,
   ) {
-    return this.caixaService.fecharCaixa(id, fecharCaixaDto);
+    return this.caixaService.fecharCaixa(id, fecharCaixaDto, empresaId);
   }
 
-  // GET /caixa/aberto/operador/:operadorId -> Busca o caixa ativo do operador
   @Get('aberto/operador/:operadorId')
-  findCaixaAbertoPorOperador(@Param('operadorId') operadorId: string) {
-    return this.caixaService.findCaixaAbertoPorOperador(operadorId);
+  findCaixaAbertoPorOperador(
+    @Param('operadorId') operadorId: string,
+    @CurrentEmpresa() empresaId: number,
+  ) {
+    return this.caixaService.findCaixaAbertoPorOperador(operadorId, empresaId);
   }
 
-  // GET /caixa -> Lista o histórico de caixas
+  @Get(':id/extrato')
+  obterExtratoMovimentacoes(
+    @Param('id') id: string,
+    @CurrentEmpresa() empresaId: number,
+  ) {
+    return this.caixaService.obterExtratoMovimentacoes(id, empresaId);
+  }
+
   @Get()
-  findAll() {
-    return this.caixaService.findAll();
+  findAll(@CurrentEmpresa() empresaId: number) {
+    return this.caixaService.findAll(empresaId);
   }
 
-  // GET /caixa/:id -> Detalhes de um caixa específico
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.caixaService.findOne(id);
+  findOne(
+    @Param('id') id: string,
+    @CurrentEmpresa() empresaId: number,
+  ) {
+    return this.caixaService.findOne(id, empresaId);
   }
 }

@@ -8,6 +8,15 @@ datasource db {
 }
 
 // ====================================================
+// ENUMS GLOBAIS
+// ====================================================
+
+enum TipoPessoa {
+  FISICA
+  JURIDICA
+}
+
+// ====================================================
 // 0. PAINEL ADMIN SAAS & CONTROLE MULTI-TENANT
 // ====================================================
 
@@ -64,8 +73,10 @@ model Empresa {
   caixas               Caixa[]
   vendas               Venda[]
   movimentacoesEstoque MovimentacaoEstoque[]
+  movimentacoesCasco   MovimentacaoCasco[]
   contasPagar          ContaPagar[]
   contasReceber        ContaReceber[]
+  logsAuditoria        LogAuditoria[]
 
   @@map("empresas")
 }
@@ -203,6 +214,7 @@ model Produto {
   itensVenda        ItemVenda[]
   itensNotaFiscal   ItemNotaFiscal[]
   movimentacoes     MovimentacaoEstoque[]
+  movimentacoesCasco MovimentacaoCasco[]
 
   @@unique([empresaId, codigoBarras])
   @@index([empresaId, codigoBarras])
@@ -238,11 +250,13 @@ model Fornecedor {
   id           String       @id @default(uuid())
   empresaId    Int
   empresa      Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tipoPessoa   TipoPessoa   @default(JURIDICA)
   cnpj         String
   razaoSocial  String
   nomeFantasia String?
   telefone     String?
   email        String?
+  observacao   String?      // Campo de observação no rodapé
   criadoEm     DateTime     @default(now())
 
   notasFiscais NotaFiscal[]
@@ -288,6 +302,7 @@ model Cliente {
   empresaId     Int
   empresa       Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   nome          String
+  tipoPessoa    TipoPessoa       @default(FISICA) // Flag para selecionar Pessoa Física (CPF) ou Jurídica (CNPJ)
   cpfCnpj       String?
   telefone      String?
   endereco      String?
@@ -295,11 +310,13 @@ model Cliente {
   saldoDevedor  Decimal          @default(0.00)
   cascosEmPosse Int              @default(0)
   ativo         Boolean          @default(true)
+  observacao    String?          // Campo de observação no rodapé
   criadoEm      DateTime         @default(now())
   atualizadoEm  DateTime         @updatedAt
 
-  vendas        Venda[]
-  fiados        HistoricoFiado[]
+  vendas             Venda[]
+  fiados             HistoricoFiado[]
+  movimentacoesCasco MovimentacaoCasco[]
 
   @@unique([empresaId, cpfCnpj])
 }
@@ -366,6 +383,21 @@ model MovimentacaoCaixa {
   criadoEm   DateTime              @default(now())
 }
 
+model LogAuditoria {
+  id         String   @id @default(uuid())
+  empresaId  Int
+  empresa    Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuarioId  String?
+  acao       String   // Ex: CANCELAR_VENDA, SANGRIA_ALTA, ALTERAR_PRECO
+  entidade   String   // Ex: Venda, Caixa, Produto
+  entidadeId String?
+  detalhes   String?
+  ip         String?
+  criadoEm   DateTime @default(now())
+
+  @@map("logs_auditoria")
+}
+
 // ====================================================
 // 7. PDV, VENDAS, ENTREGAS E PAGAMENTOS MISTOS
 // ====================================================
@@ -413,6 +445,7 @@ model Venda {
   statusAcerto    StatusAcerto     @default(CONCLUIDO)
   taxaEntrega     Decimal          @default(0.00)
   enderecoEntrega String?
+  observacao      String?          // Campo de observação no rodapé da venda
   criadoEm        DateTime         @default(now())
 
   itens           ItemVenda[]
@@ -480,6 +513,21 @@ model MovimentacaoEstoque {
   criadoEm   DateTime                @default(now())
 }
 
+model MovimentacaoCasco {
+  id         String   @id @default(uuid())
+  empresaId  Int
+  empresa    Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  clienteId  String
+  cliente    Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  produtoId  Int
+  produto    Produto  @relation(fields: [produtoId], references: [id])
+  quantidade Int      // Positivo para entrega, negativo para devolução
+  observacao String?
+  criadoEm   DateTime @default(now())
+
+  @@map("movimentacoes_cascos")
+}
+
 // ====================================================
 // 9. FINANCEIRO COMPLETO (CONTAS A PAGAR / RECEBER)
 // ====================================================
@@ -508,7 +556,7 @@ model ContaPagar {
 model ContaReceber {
   id              String      @id @default(uuid())
   empresaId       Int
-  empresa        Empresa     @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa         Empresa     @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   descricao       String
   valor           Decimal
   dataVencimento  DateTime

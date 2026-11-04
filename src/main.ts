@@ -1,7 +1,8 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { AppModule } from './app.module';
+import { PrismaExceptionFilter } from './core/filters/prisma-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -26,7 +27,10 @@ async function bootstrap() {
     }),
   );
 
-  // 3. Documentação Swagger
+  // 3. Filtro Global de Tratamento de Erros do Prisma
+  app.useGlobalFilters(new PrismaExceptionFilter());
+
+  // 4. Documentação Swagger
   const config = new DocumentBuilder()
     .setTitle('Bebfy API')
     .setDescription('API Backend Multi-tenant para Gestão de Distribuidoras e Varejo de Bebidas')
