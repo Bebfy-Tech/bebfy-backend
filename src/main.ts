@@ -7,9 +7,9 @@ import { PrismaExceptionFilter } from './core/filters/prisma-exception.filter';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // 1. Configuração de CORS (suporte a subdomínios do Bebfy e ambiente local)
-  app.enableCors({
-    origin: true,
+  // 1. Configuração de CORS (suporte a subdomínios do Bebfy e ambiente local com React)
+app.enableCors({
+    origin: ['http://localhost:5173', 'http://localhost:3000'],
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Accept, Authorization, x-tenant, x-subdominio',

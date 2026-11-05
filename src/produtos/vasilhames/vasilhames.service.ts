@@ -53,8 +53,7 @@ export class VasilhamesService {
           clienteId: dto.clienteId,
           produtoId: dto.produtoId,
           quantidade: dto.quantidade,
-          tipo: dto.tipo as any,
-          observacao: dto.observacao,
+          observacao: dto.observacao ? `${dto.tipo}: ${dto.observacao}` : dto.tipo,
         },
         include: {
           cliente: { select: { id: true, nome: true, cascosEmPosse: true } },

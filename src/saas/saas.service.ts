@@ -7,12 +7,11 @@ import { CriarEmpresaDto } from './dto/criar-empresa.dto';
 export class SaasService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // NOVO: Cadastrar uma nova empresa (Tenant) pelo painel da matriz
   async criarEmpresa(dto: CriarEmpresaDto) {
     const empresaExistente = await this.prisma.empresa.findFirst({
       where: {
         OR: [
-          { documento: dto.documento },
+          { cnpj: dto.documento },
           { subdominio: dto.subdominio },
         ],
       },
@@ -32,13 +31,13 @@ export class SaasService {
 
     return this.prisma.empresa.create({
       data: {
+        nomeFantasia: dto.nome,
         razaoSocial: dto.nome,
         cnpj: dto.documento,
         subdominio: dto.subdominio,
-        email: dto.email,
-        telefone: dto.telefone,
+        slug: dto.subdominio || dto.nome.toLowerCase().replace(/[^a-z0-9]/g, '-'),
         planoId: dto.planoId,
-        status: StatusEmpresa.EM_TESTE, // Inicia em período de testes por padrão
+        status: StatusEmpresa.EM_TESTE,
       },
       include: {
         plano: true,
