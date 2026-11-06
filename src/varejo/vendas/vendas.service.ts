@@ -291,17 +291,43 @@ export class VendasService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      let totalCascosParaEstornar = 0;
+
+      // 1. Devolve os produtos ao estoque e contabiliza cascos retornáveis
       for (const item of venda.itens) {
+        const produto = await tx.produto.findUnique({ where: { id: item.produtoId } });
+
+        const unidades = (item as any)?.isFardo
+          ? item.quantidade * (produto?.fardoQuantidade || 1)
+          : item.quantidade;
+
         await tx.produto.update({
           where: { id: item.produtoId },
           data: {
             estoqueAtual: {
-              increment: item.quantidade,
+              increment: unidades,
+            },
+          },
+        });
+
+        if (produto?.retornavel) {
+          totalCascosParaEstornar += unidades;
+        }
+      }
+
+      // 2. Estorno do saldo de cascos em posse do cliente (se houver cliente vinculado)
+      if (venda.clienteId && totalCascosParaEstornar > 0) {
+        await tx.cliente.update({
+          where: { id: venda.clienteId },
+          data: {
+            cascosEmPosse: {
+              decrement: totalCascosParaEstornar,
             },
           },
         });
       }
 
+      // 3. Estorno do Fiado (se houver pagamento em FIADO)
       const pagamentoFiado = venda.pagamentos.find(
         (p) => p.formaPagamento === FormaPagamento.FIADO,
       );
@@ -331,6 +357,7 @@ export class VendasService {
         });
       }
 
+      // 4. Marca a venda como CANCELADA
       return tx.venda.update({
         where: { id },
         data: { status: StatusVenda.CANCELADA },
