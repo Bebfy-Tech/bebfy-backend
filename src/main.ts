@@ -39,22 +39,34 @@ async function bootstrap() {
   // 3. Filtro Global de Tratamento de Erros do Prisma
   app.useGlobalFilters(new PrismaExceptionFilter());
 
-  // 4. Documentação Swagger
+  // 4. Documentação Swagger com suporte a Autenticação Bearer (JWT)
   const config = new DocumentBuilder()
     .setTitle('Bebfy API')
-    .setDescription('API Backend Multi-tenant para Gestão de Distribuidoras e Varejo de Bebidas')
+    .setDescription(
+      'Sistema SaaS de Gestão para Distribuidoras de Bebidas — API Multi-tenant',
+    )
     .setVersion('1.0')
-    .addBearerAuth()
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'JWT',
+        description: 'Introduza o token JWT gerado no endpoint de login',
+        in: 'header',
+      },
+      'JWT-auth',
+    )
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  SwaggerModule.setup('api', app, document);
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
 
   console.log(`\n🚀 Bebfy Backend executando com sucesso na porta ${port}`);
-  console.log(`📄 Documentação Swagger disponível em: http://localhost:${port}/api/docs\n`);
+  console.log(`📄 Documentação Swagger disponível em: http://localhost:${port}/api\n`);
 }
 
 bootstrap();
