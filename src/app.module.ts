@@ -2,14 +2,13 @@ import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 
-// Middleware Tenant Multi-tenant
+// Middleware Multi-tenant
 import { TenantMiddleware } from './core/tenant/tenant.middleware';
 
 // Core
 import { PrismaModule } from './core/prisma/prisma.module';
 import { AuthModule } from './core/auth/auth.module';
 import { FuncionariosModule } from './core/funcionarios/funcionarios.module';
-
 
 // Varejo / PDV
 import { CaixaModule } from './varejo/caixa/caixa.module';
@@ -29,11 +28,17 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
 
 @Module({
   imports: [
-    // Rate Limiting: Limita a 100 requisições a cada 60 segundos por IP
+    // Rate Limiting com duas políticas: padrão do sistema e proteção de login
     ThrottlerModule.forRoot([
       {
-        ttl: 60000,
-        limit: 100,
+        name: 'default',
+        ttl: 60000,  // 1 minuto
+        limit: 100,  // 100 requisições normais por minuto
+      },
+      {
+        name: 'strict',
+        ttl: 60000,  // 1 minuto
+        limit: 5,    // Máximo de 5 tentativas de login por IP por minuto
       },
     ]),
 
