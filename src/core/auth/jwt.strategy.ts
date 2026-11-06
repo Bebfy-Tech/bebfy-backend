@@ -49,7 +49,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('A empresa vinculada a este utilizador encontra-se inativa.');
     }
 
-    // Retorna os dados do utilizador e injeta empresaId e cargo na raiz do objeto req.user
     return {
       ...usuario,
       empresaId: usuario.funcionario.empresaId,

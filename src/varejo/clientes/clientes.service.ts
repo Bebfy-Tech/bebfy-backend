@@ -12,7 +12,7 @@ export class ClientesService {
   constructor(private readonly prisma: PrismaService) {}
 
   // Registra um novo cliente no banco de dados com isolamento por empresa
-  async create(createClienteDto: CreateClienteDto, empresaId: number = 1) {
+  async create(empresaId: number, createClienteDto: CreateClienteDto) {
     return this.prisma.cliente.create({
       data: {
         ...createClienteDto,
@@ -22,7 +22,7 @@ export class ClientesService {
   }
 
   // Lista todos os clientes cadastrados na empresa, do mais recente para o mais antigo
-  async findAll(empresaId: number = 1) {
+  async findAll(empresaId: number) {
     return this.prisma.cliente.findMany({
       where: { empresaId } as any,
       include: {
@@ -40,7 +40,7 @@ export class ClientesService {
   }
 
   // Busca um cliente específico pelo ID (UUID) garantindo isolamento por empresa
-  async findOne(id: string, empresaId: number = 1) {
+  async findOne(empresaId: number, id: string) {
     const cliente = await this.prisma.cliente.findFirst({
       where: {
         id,
@@ -63,9 +63,9 @@ export class ClientesService {
   }
 
   // Atualiza as informações cadastrais, limite de crédito ou saldo do cliente
-  async update(id: string, updateClienteDto: UpdateClienteDto, empresaId: number = 1) {
+  async update(empresaId: number, id: string, updateClienteDto: UpdateClienteDto) {
     // Garante que o cliente existe na base da empresa antes de atualizar
-    await this.findOne(id, empresaId);
+    await this.findOne(empresaId, id);
 
     return this.prisma.cliente.update({
       where: { id },
@@ -74,9 +74,9 @@ export class ClientesService {
   }
 
   // Remove o cadastro de um cliente
-  async remove(id: string, empresaId: number = 1) {
+  async remove(empresaId: number, id: string) {
     // Garante que o cliente existe na base da empresa antes de deletar
-    await this.findOne(id, empresaId);
+    await this.findOne(empresaId, id);
 
     return this.prisma.cliente.delete({
       where: { id },

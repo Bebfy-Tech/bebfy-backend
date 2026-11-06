@@ -17,7 +17,7 @@ import {
 export class VendasService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createVendaDto: CreateVendaDto, empresaId: number) {
+  async create(empresaId: number, createVendaDto: CreateVendaDto) {
     const caixa = await this.prisma.caixa.findUnique({
       where: { id: createVendaDto.caixaId },
       include: { operador: true },
@@ -239,7 +239,7 @@ export class VendasService {
     };
   }
 
-  async confirmarAcertoDelivery(vendaIds: string[], empresaId: number) {
+  async confirmarAcertoDelivery(empresaId: number, vendaIds: string[]) {
     return this.prisma.venda.updateMany({
       where: {
         id: { in: vendaIds },
@@ -264,7 +264,7 @@ export class VendasService {
     });
   }
 
-  async findOne(id: string, empresaId: number) {
+  async findOne(empresaId: number, id: string) {
     const venda = await this.prisma.venda.findFirst({
       where: { id, empresaId },
       include: {
@@ -283,8 +283,8 @@ export class VendasService {
     return venda;
   }
 
-  async cancelarVenda(id: string, empresaId: number) {
-    const venda = await this.findOne(id, empresaId);
+  async cancelarVenda(empresaId: number, id: string) {
+    const venda = await this.findOne(empresaId, id);
 
     if (venda.status === StatusVenda.CANCELADA) {
       throw new BadRequestException('Esta venda já se encontra CANCELADA.');

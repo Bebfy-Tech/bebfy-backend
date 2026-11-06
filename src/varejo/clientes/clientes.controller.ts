@@ -1,4 +1,4 @@
-// Importamos os decoradores HTTP do NestJS e a proteção por Guard JWT
+// Importamos os decoradores HTTP do NestJS e as proteções de segurança
 import {
   Controller,
   Get,
@@ -14,42 +14,57 @@ import { ClientesService } from './clientes.service';
 // Importamos os DTOs
 import { CreateClienteDto } from './dto/create-cliente.dto';
 import { UpdateClienteDto } from './dto/update-cliente.dto';
-// Importamos o Guard de autenticação JWT
+// Importamos os Guards de autenticação e isolamento por empresa
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
+import { TenantGuard } from '../../common/guards/tenant.guard';
+import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 
-// Exige token JWT autenticado para acessar qualquer rota de clientes
-@UseGuards(JwtAuthGuard)
+// Exige token JWT autenticado e validação de empresa para acessar qualquer rota de clientes
+@UseGuards(JwtAuthGuard, TenantGuard)
 @Controller('clientes')
 export class ClientesController {
   constructor(private readonly clientesService: ClientesService) {}
 
-  // POST /clientes -> Cadastra um novo cliente
+  // POST /clientes -> Cadastra um novo cliente com injeção segura de empresaId
   @Post()
-  create(@Body() createClienteDto: CreateClienteDto) {
-    return this.clientesService.create(createClienteDto);
+  create(
+    @CurrentTenant() empresaId: number,
+    @Body() createClienteDto: CreateClienteDto,
+  ) {
+    return this.clientesService.create(empresaId, createClienteDto);
   }
 
-  // GET /clientes -> Retorna a lista de todos os clientes
+  // GET /clientes -> Retorna a lista de todos os clientes da empresa
   @Get()
-  findAll() {
-    return this.clientesService.findAll();
+  findAll(@CurrentTenant() empresaId: number) {
+    return this.clientesService.findAll(empresaId);
   }
 
   // GET /clientes/:id -> Busca os dados de um cliente pelo ID
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.clientesService.findOne(id);
+  findOne(
+    @CurrentTenant() empresaId: number,
+    @Param('id') id: string,
+  ) {
+    return this.clientesService.findOne(empresaId, id);
   }
 
   // PATCH /clientes/:id -> Atualiza os dados de um cliente existente
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateClienteDto: UpdateClienteDto) {
-    return this.clientesService.update(id, updateClienteDto);
+  update(
+    @CurrentTenant() empresaId: number,
+    @Param('id') id: string,
+    @Body() updateClienteDto: UpdateClienteDto,
+  ) {
+    return this.clientesService.update(empresaId, id, updateClienteDto);
   }
 
   // DELETE /clientes/:id -> Exclui o cadastro de um cliente
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.clientesService.remove(id);
+  remove(
+    @CurrentTenant() empresaId: number,
+    @Param('id') id: string,
+  ) {
+    return this.clientesService.remove(empresaId, id);
   }
 }

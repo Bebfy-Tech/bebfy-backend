@@ -13,7 +13,7 @@ import { StatusCaixa, TipoMovimentacaoCaixa } from '@prisma/client';
 export class CaixaService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async abrirCaixa(abrirCaixaDto: AbrirCaixaDto, empresaId: number) {
+  async abrirCaixa(empresaId: number, abrirCaixaDto: AbrirCaixaDto) {
     const operador = await this.prisma.funcionario.findFirst({
       where: {
         id: abrirCaixaDto.operadorId,
@@ -37,7 +37,7 @@ export class CaixaService {
 
     if (caixaAberto) {
       throw new BadRequestException(
-        'Já existe um caixa ABERTO para este operador.',
+        'Já existe um caixa ABERTO para este operador nesta empresa.',
       );
     }
 
@@ -52,9 +52,9 @@ export class CaixaService {
   }
 
   async adicionarMovimentacao(
+    empresaId: number,
     caixaId: string,
     movimentacaoDto: MovimentacaoCaixaDto,
-    empresaId: number,
   ) {
     const caixa = await this.prisma.caixa.findFirst({
       where: { 
@@ -88,9 +88,9 @@ export class CaixaService {
   }
 
   async fecharCaixa(
+    empresaId: number,
     caixaId: string,
     fecharCaixaDto: FecharCaixaDto,
-    empresaId: number,
   ) {
     const caixa = await this.prisma.caixa.findFirst({
       where: { 
@@ -139,7 +139,7 @@ export class CaixaService {
     });
   }
 
-  async findCaixaAbertoPorOperador(operadorId: string, empresaId: number) {
+  async findCaixaAbertoPorOperador(empresaId: number, operadorId: string) {
     const caixa = await this.prisma.caixa.findFirst({
       where: {
         operadorId,
@@ -182,7 +182,7 @@ export class CaixaService {
     });
   }
 
-  async findOne(id: string, empresaId: number) {
+  async findOne(empresaId: number, id: string) {
     const caixa = await this.prisma.caixa.findFirst({
       where: { 
         id,
@@ -204,9 +204,8 @@ export class CaixaService {
     return caixa;
   }
 
-  // Novo método de Extrato de Movimentações (Auditoria do Caixa)
-  async obterExtratoMovimentacoes(caixaId: string, empresaId: number) {
-    const caixa = await this.findOne(caixaId, empresaId);
+  async obterExtratoMovimentacoes(empresaId: number, caixaId: string) {
+    const caixa = await this.findOne(empresaId, caixaId);
 
     const totalSuprimentos = caixa.movimentacoes
       .filter((m) => m.tipo === TipoMovimentacaoCaixa.SUPRIMENTO)

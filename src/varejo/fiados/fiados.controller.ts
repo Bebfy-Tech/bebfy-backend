@@ -3,37 +3,41 @@ import { FiadosService } from './fiados.service';
 import { CreateFiadoDto } from './dto/create-fiado.dto';
 import { PagarFiadoDto } from './dto/pagar-fiado.dto';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
-import { CurrentEmpresa } from '../../core/auth/decorators/current-empresa.decorator';
+import { TenantGuard } from '../../common/guards/tenant.guard';
+import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 @Controller('fiados')
 export class FiadosController {
   constructor(private readonly fiadosService: FiadosService) {}
 
   @Post()
-  create(@Body() createFiadoDto: CreateFiadoDto) {
-    return this.fiadosService.create(createFiadoDto);
+  create(
+    @CurrentTenant() empresaId: number,
+    @Body() createFiadoDto: CreateFiadoDto,
+  ) {
+    return this.fiadosService.create(empresaId, createFiadoDto);
   }
 
   @Post('pagar/:clienteId')
   registrarPagamento(
+    @CurrentTenant() empresaId: number,
     @Param('clienteId') clienteId: string,
     @Body() dto: PagarFiadoDto,
-    @CurrentEmpresa() empresaId: number,
   ) {
-    return this.fiadosService.registrarPagamento(clienteId, dto, empresaId);
+    return this.fiadosService.registrarPagamento(empresaId, clienteId, dto);
   }
 
   @Get()
-  findAll(@CurrentEmpresa() empresaId: number) {
+  findAll(@CurrentTenant() empresaId: number) {
     return this.fiadosService.findAll(empresaId);
   }
 
   @Get('cliente/:clienteId')
   findByCliente(
+    @CurrentTenant() empresaId: number,
     @Param('clienteId') clienteId: string,
-    @CurrentEmpresa() empresaId: number,
   ) {
-    return this.fiadosService.findByCliente(clienteId, empresaId);
+    return this.fiadosService.findByCliente(empresaId, clienteId);
   }
 }

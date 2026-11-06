@@ -14,63 +14,64 @@ import { ProdutosService } from './produtos.service';
 import { CreateProdutoDto } from './dto/create-produto.dto';
 import { UpdateProdutoDto } from './dto/update-produto.dto';
 import { JwtAuthGuard } from '../core/auth/jwt-auth.guard';
-import { CurrentEmpresa } from '../core/auth/decorators/current-empresa.decorator';
+import { TenantGuard } from '../common/guards/tenant.guard';
+import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 @Controller('produtos')
 export class ProdutosController {
   constructor(private readonly produtosService: ProdutosService) {}
 
   @Post()
   create(
+    @CurrentTenant() empresaId: number,
     @Body() createProdutoDto: CreateProdutoDto,
-    @CurrentEmpresa() empresaId: number,
   ) {
     return this.produtosService.create(createProdutoDto, empresaId);
   }
 
   @Get()
-  findAll(@CurrentEmpresa() empresaId: number) {
+  findAll(@CurrentTenant() empresaId: number) {
     return this.produtosService.findAll(empresaId);
   }
 
   @Get('codigo-barras/:codigo')
   buscarPorCodigoBarras(
+    @CurrentTenant() empresaId: number,
     @Param('codigo') codigo: string,
-    @CurrentEmpresa() empresaId: number,
   ) {
     return this.produtosService.buscarPorCodigoBarras(codigo, empresaId);
   }
 
   @Get('buscar')
   buscarInteligente(
+    @CurrentTenant() empresaId: number,
     @Query('q') termo: string,
-    @CurrentEmpresa() empresaId: number,
   ) {
     return this.produtosService.buscarInteligente(termo, empresaId);
   }
 
   @Get(':id')
   findOne(
+    @CurrentTenant() empresaId: number,
     @Param('id', ParseIntPipe) id: number,
-    @CurrentEmpresa() empresaId: number,
   ) {
     return this.produtosService.findOne(id, empresaId);
   }
 
   @Patch(':id')
   update(
+    @CurrentTenant() empresaId: number,
     @Param('id', ParseIntPipe) id: number,
     @Body() updateProdutoDto: UpdateProdutoDto,
-    @CurrentEmpresa() empresaId: number,
   ) {
     return this.produtosService.update(id, updateProdutoDto, empresaId);
   }
 
   @Delete(':id')
   remove(
+    @CurrentTenant() empresaId: number,
     @Param('id', ParseIntPipe) id: number,
-    @CurrentEmpresa() empresaId: number,
   ) {
     return this.produtosService.remove(id, empresaId);
   }

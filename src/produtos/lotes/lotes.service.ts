@@ -6,23 +6,17 @@ import { CreateLoteDto } from './dto/create-lote.dto';
 export class LotesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createLoteDto: CreateLoteDto, empresaId: number = 1) {
-    // 1. Busca o produto pelo ID
-    const produto = await this.prisma.produto.findUnique({
-      where: { id: createLoteDto.produtoId },
+  async create(empresaId: number, createLoteDto: CreateLoteDto) {
+    // 1. Busca o produto pelo ID garantindo pertencimento à empresa
+    const produto = await this.prisma.produto.findFirst({
+      where: { id: createLoteDto.produtoId, empresaId },
     });
 
     if (!produto) {
-      throw new NotFoundException('O produto informado para este lote não foi encontrado.');
+      throw new NotFoundException('O produto informado para este lote não foi encontrado nesta empresa.');
     }
 
-    // Validação de segurança por empresa
-    const produtoEmpresaId = (produto as any)?.empresaId;
-    if (produtoEmpresaId && produtoEmpresaId !== empresaId) {
-      throw new NotFoundException('O produto informado não pertence a esta empresa.');
-    }
-
-    // 2. Cria o lote e atualiza o estoque do produto
+    // 2. Cria o lote e atualiza o estoque do produto em transação atômica
     return this.prisma.$transaction(async (tx) => {
       const lote = await tx.loteProduto.create({
         data: {
@@ -48,8 +42,13 @@ export class LotesService {
     });
   }
 
-  async findAll(empresaId: number = 1) {
-    const lotes = await this.prisma.loteProduto.findMany({
+  async findAll(empresaId: number) {
+    return this.prisma.loteProduto.findMany({
+      where: {
+        produto: {
+          empresaId,
+        },
+      },
       include: {
         produto: true,
       },
@@ -57,33 +56,30 @@ export class LotesService {
         criadoEm: 'desc',
       },
     });
-
-    // Filtra os lotes por empresa garantindo compatibilidade de tipos
-    return lotes.filter((lote) => {
-      const produtoEmpresaId = (lote.produto as any)?.empresaId;
-      return !produtoEmpresaId || produtoEmpresaId === empresaId;
-    });
   }
 
-  async findOne(id: number, empresaId: number = 1) {
-    const lote = await this.prisma.loteProduto.findUnique({
-      where: { id },
+  async findOne(empresaId: number, id: number) {
+    const lote = await this.prisma.loteProduto.findFirst({
+      where: {
+        id,
+        produto: {
+          empresaId,
+        },
+      },
       include: {
         produto: true,
       },
     });
 
-    const produtoEmpresaId = (lote?.produto as any)?.empresaId;
-
-    if (!lote || (produtoEmpresaId && produtoEmpresaId !== empresaId)) {
+    if (!lote) {
       throw new NotFoundException(`Lote com o ID ${id} não foi encontrado nesta empresa.`);
     }
 
     return lote;
   }
 
-  async remove(id: number, empresaId: number = 1) {
-    const lote = await this.findOne(id, empresaId);
+  async remove(empresaId: number, id: number) {
+    const lote = await this.findOne(empresaId, id);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.produto.update({

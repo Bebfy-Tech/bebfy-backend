@@ -12,13 +12,13 @@ import { TipoTransacaoFiado, TipoMovimentacaoCaixa } from '@prisma/client';
 export class FiadosService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createFiadoDto: CreateFiadoDto) {
-    const cliente = await this.prisma.cliente.findUnique({
-      where: { id: createFiadoDto.clienteId },
+  async create(empresaId: number, createFiadoDto: CreateFiadoDto) {
+    const cliente = await this.prisma.cliente.findFirst({
+      where: { id: createFiadoDto.clienteId, empresaId, ativo: true },
     });
 
-    if (!cliente || !cliente.ativo) {
-      throw new NotFoundException('O cliente informado não foi encontrado.');
+    if (!cliente) {
+      throw new NotFoundException('O cliente informado não foi encontrado nesta empresa.');
     }
 
     const valorNum = Number(createFiadoDto.valor);
@@ -66,7 +66,7 @@ export class FiadosService {
     });
   }
 
-  async registrarPagamento(clienteId: string, dto: PagarFiadoDto, empresaId: number) {
+  async registrarPagamento(empresaId: number, clienteId: string, dto: PagarFiadoDto) {
     return this.prisma.$transaction(async (tx) => {
       const cliente = await tx.cliente.findFirst({
         where: { id: clienteId, empresaId, ativo: true },
@@ -137,7 +137,7 @@ export class FiadosService {
     });
   }
 
-  async findByCliente(clienteId: string, empresaId: number) {
+  async findByCliente(empresaId: number, clienteId: string) {
     const cliente = await this.prisma.cliente.findFirst({
       where: { id: clienteId, empresaId, ativo: true },
     });

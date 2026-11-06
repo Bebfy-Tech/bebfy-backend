@@ -7,7 +7,7 @@ import { UpdateCategoriaDto } from './dto/update-categoria.dto';
 export class CategoriasService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createCategoriaDto: CreateCategoriaDto, empresaId: number = 1) {
+  async create(empresaId: number, createCategoriaDto: CreateCategoriaDto) {
     return this.prisma.categoria.create({
       data: {
         ...createCategoriaDto,
@@ -16,8 +16,9 @@ export class CategoriasService {
     });
   }
 
-  async findAll() {
+  async findAll(empresaId: number) {
     return this.prisma.categoria.findMany({
+      where: { empresaId },
       include: {
         _count: {
           select: { produtos: true },
@@ -27,21 +28,21 @@ export class CategoriasService {
     });
   }
 
-  async findOne(id: string) {
-    const categoria = await this.prisma.categoria.findUnique({
-      where: { id },
+  async findOne(empresaId: number, id: string) {
+    const categoria = await this.prisma.categoria.findFirst({
+      where: { id, empresaId },
       include: { produtos: true },
     });
 
     if (!categoria) {
-      throw new NotFoundException(`Categoria com ID ${id} não encontrada.`);
+      throw new NotFoundException(`Categoria não encontrada ou não pertence a esta empresa.`);
     }
 
     return categoria;
   }
 
-  async update(id: string, updateCategoriaDto: UpdateCategoriaDto) {
-    await this.findOne(id);
+  async update(empresaId: number, id: string, updateCategoriaDto: UpdateCategoriaDto) {
+    await this.findOne(empresaId, id);
 
     return this.prisma.categoria.update({
       where: { id },
@@ -49,8 +50,8 @@ export class CategoriasService {
     });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(empresaId: number, id: string) {
+    await this.findOne(empresaId, id);
 
     return this.prisma.categoria.delete({
       where: { id },

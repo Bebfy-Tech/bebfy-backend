@@ -11,22 +11,15 @@ export class MovimentacoesEstoqueService {
   constructor(private readonly prisma: PrismaService) {}
 
   // Registra a movimentação e atualiza o saldo do produto atomicamente
-  async create(createDto: CreateMovimentacaoEstoqueDto, empresaId: number = 1) {
-    // 1. Valida se o produto existe e pertence a esta empresa
-    const produto = await this.prisma.produto.findUnique({
-      where: { id: createDto.produtoId },
+  async create(empresaId: number, createDto: CreateMovimentacaoEstoqueDto) {
+    // 1. Valida se o produto existe e pertence estritamente a esta empresa
+    const produto = await this.prisma.produto.findFirst({
+      where: { id: createDto.produtoId, empresaId },
     });
 
     if (!produto) {
       throw new NotFoundException(
-        `Produto ID ${createDto.produtoId} não encontrado.`,
-      );
-    }
-
-    const produtoEmpresaId = (produto as any)?.empresaId;
-    if (produtoEmpresaId && produtoEmpresaId !== empresaId) {
-      throw new NotFoundException(
-        `Produto ID ${createDto.produtoId} não pertence a esta empresa.`,
+        `Produto ID ${createDto.produtoId} não encontrado nesta empresa.`,
       );
     }
 
@@ -79,28 +72,31 @@ export class MovimentacoesEstoqueService {
   }
 
   // Lista o histórico de movimentações da empresa
-  async findAll(empresaId: number = 1) {
-    const movimentacoes = await this.prisma.movimentacaoEstoque.findMany({
+  async findAll(empresaId: number) {
+    return this.prisma.movimentacaoEstoque.findMany({
+      where: {
+        produto: {
+          empresaId,
+        },
+      },
       include: { produto: true },
       orderBy: { criadoEm: 'desc' },
-    });
-
-    return movimentacoes.filter((mov) => {
-      const pEmpresaId = (mov.produto as any)?.empresaId;
-      return !pEmpresaId || pEmpresaId === empresaId;
     });
   }
 
   // Busca detalhes de uma movimentação pelo ID garantindo isolamento por empresa
-  async findOne(id: any, empresaId: number = 1) {
-    const movimentacao = await this.prisma.movimentacaoEstoque.findUnique({
-      where: { id },
+  async findOne(empresaId: number, id: any) {
+    const movimentacao = await this.prisma.movimentacaoEstoque.findFirst({
+      where: {
+        id,
+        produto: {
+          empresaId,
+        },
+      },
       include: { produto: true },
     });
 
-    const produtoEmpresaId = (movimentacao?.produto as any)?.empresaId;
-
-    if (!movimentacao || (produtoEmpresaId && produtoEmpresaId !== empresaId)) {
+    if (!movimentacao) {
       throw new NotFoundException(
         `Movimentação de estoque ID ${id} não encontrada nesta empresa.`,
       );

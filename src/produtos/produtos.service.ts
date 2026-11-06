@@ -42,7 +42,7 @@ export class ProdutosService {
     });
 
     if (!produto) {
-      throw new NotFoundException(`Produto com o ID ${id} não foi encontrado.`);
+      throw new NotFoundException(`Produto com o ID ${id} não foi encontrado nesta empresa.`);
     }
 
     return produto;
@@ -68,13 +68,17 @@ export class ProdutosService {
     });
 
     if (!produto) {
-      throw new NotFoundException('Produto não encontrado pelo código de barras.');
+      throw new NotFoundException('Produto não encontrado pelo código de barras nesta empresa.');
     }
 
     return produto;
   }
 
   async buscarInteligente(termo: string, empresaId: number) {
+    if (!termo) {
+      return this.findAll(empresaId);
+    }
+
     const produtoPorCodigo = await this.prisma.produto.findFirst({
       where: {
         codigoBarras: termo,

@@ -7,15 +7,24 @@ import { PrismaExceptionFilter } from './core/filters/prisma-exception.filter';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // 1. Configuração de CORS (suporte a subdomínios do Bebfy e ambiente local com React)
-app.enableCors({
-    origin: ['http://localhost:5173', 'http://localhost:3000'],
+  // 1. Configuração de CORS (suporte ao ambiente local, subdomínios do Bebfy e frontend configurado no .env)
+  const allowedOrigins = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+  ];
+
+  if (process.env.FRONTEND_URL && !allowedOrigins.includes(process.env.FRONTEND_URL)) {
+    allowedOrigins.push(process.env.FRONTEND_URL);
+  }
+
+  app.enableCors({
+    origin: allowedOrigins,
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders: 'Content-Type, Accept, Authorization, x-tenant, x-subdominio',
+    allowedHeaders: 'Content-Type, Accept, Authorization, x-tenant, x-subdominio, x-empresa-id',
   });
 
-  // 2. Validação e Sanitização Global de DTOs
+  // 2. Validação e Sanitização Global de DTOs (Barrar dados malformados ou extras)
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

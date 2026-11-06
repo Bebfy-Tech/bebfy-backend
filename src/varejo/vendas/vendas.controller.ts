@@ -10,46 +10,53 @@ import {
 import { VendasService } from './vendas.service';
 import { CreateVendaDto } from './dto/create-venda.dto';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
-import { CurrentEmpresa } from '../../core/auth/decorators/current-empresa.decorator';
+import { TenantGuard } from '../../common/guards/tenant.guard';
+import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 @Controller('vendas')
 export class VendasController {
   constructor(private readonly vendasService: VendasService) {}
 
   @Post()
   create(
+    @CurrentTenant() empresaId: number,
     @Body() createVendaDto: CreateVendaDto,
-    @CurrentEmpresa() empresaId: number,
   ) {
-    return this.vendasService.create(createVendaDto, empresaId);
+    return this.vendasService.create(empresaId, createVendaDto);
   }
 
   @Get('delivery/pendentes-acerto')
-  listarPendentesAcertoDelivery(@CurrentEmpresa() empresaId: number) {
+  listarPendentesAcertoDelivery(@CurrentTenant() empresaId: number) {
     return this.vendasService.listarPendentesAcertoDelivery(empresaId);
   }
 
   @Patch('delivery/confirmar-acerto')
   confirmarAcertoDelivery(
+    @CurrentTenant() empresaId: number,
     @Body('vendaIds') vendaIds: string[],
-    @CurrentEmpresa() empresaId: number,
   ) {
-    return this.vendasService.confirmarAcertoDelivery(vendaIds, empresaId);
+    return this.vendasService.confirmarAcertoDelivery(empresaId, vendaIds);
   }
 
   @Get()
-  findAll(@CurrentEmpresa() empresaId: number) {
+  findAll(@CurrentTenant() empresaId: number) {
     return this.vendasService.findAll(empresaId);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @CurrentEmpresa() empresaId: number) {
-    return this.vendasService.findOne(id, empresaId);
+  findOne(
+    @CurrentTenant() empresaId: number,
+    @Param('id') id: string,
+  ) {
+    return this.vendasService.findOne(empresaId, id);
   }
 
   @Patch(':id/cancelar')
-  cancelarVenda(@Param('id') id: string, @CurrentEmpresa() empresaId: number) {
-    return this.vendasService.cancelarVenda(id, empresaId);
+  cancelarVenda(
+    @CurrentTenant() empresaId: number,
+    @Param('id') id: string,
+  ) {
+    return this.vendasService.cancelarVenda(empresaId, id);
   }
 }
