@@ -1,4 +1,3 @@
-// Importamos os decoradores HTTP do NestJS e a proteção JWT
 import {
   Controller,
   Get,
@@ -9,35 +8,63 @@ import {
   Delete,
   UseGuards,
 } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+} from '@nestjs/swagger';
 import { FuncionariosService } from './funcionarios.service';
 import { CreateFuncionarioDto } from './dto/create-funcionario.dto';
 import { UpdateFuncionarioDto } from './dto/update-funcionario.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
+@ApiTags('Gestão & Equipa')
+@ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard)
 @Controller('funcionarios')
 export class FuncionariosController {
   constructor(private readonly funcionariosService: FuncionariosService) {}
 
-  // POST /funcionarios -> Cadastra um novo funcionário
+  @ApiOperation({
+    summary: 'Cadastrar novo funcionário',
+    description: 'Regista um novo colaborador na equipa.',
+  })
+  @ApiResponse({ status: 201, description: 'Funcionário cadastrado com sucesso.' })
   @Post()
   create(@Body() createFuncionarioDto: CreateFuncionarioDto) {
     return this.funcionariosService.create(createFuncionarioDto);
   }
 
-  // GET /funcionarios -> Retorna a lista de todos os funcionários
+  @ApiOperation({
+    summary: 'Listar todos os funcionários',
+    description: 'Retorna a lista completa de funcionários.',
+  })
+  @ApiResponse({ status: 200, description: 'Lista de funcionários retornada.' })
   @Get()
   findAll() {
     return this.funcionariosService.findAll();
   }
 
-  // GET /funcionarios/:id -> Retorna o funcionário pelo ID
+  @ApiOperation({
+    summary: 'Buscar funcionário por ID',
+    description: 'Retorna os detalhes de um funcionário específico.',
+  })
+  @ApiParam({ name: 'id', description: 'ID do funcionário' })
+  @ApiResponse({ status: 200, description: 'Funcionário encontrado.' })
+  @ApiResponse({ status: 404, description: 'Funcionário não encontrado.' })
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.funcionariosService.findOne(id);
   }
 
-  // PATCH /funcionarios/:id -> Atualiza os dados de um funcionário
+  @ApiOperation({
+    summary: 'Atualizar dados de um funcionário',
+    description: 'Altera os dados cadastrais ou permissões de um funcionário.',
+  })
+  @ApiParam({ name: 'id', description: 'ID do funcionário' })
+  @ApiResponse({ status: 200, description: 'Funcionário atualizado com sucesso.' })
   @Patch(':id')
   update(
     @Param('id') id: string,
@@ -46,7 +73,12 @@ export class FuncionariosController {
     return this.funcionariosService.update(id, updateFuncionarioDto);
   }
 
-  // DELETE /funcionarios/:id -> Remove um funcionário
+  @ApiOperation({
+    summary: 'Remover funcionário',
+    description: 'Exclui o registo de um funcionário.',
+  })
+  @ApiParam({ name: 'id', description: 'ID do funcionário' })
+  @ApiResponse({ status: 200, description: 'Funcionário removido com sucesso.' })
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.funcionariosService.remove(id);

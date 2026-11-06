@@ -6,12 +6,21 @@ import {
   Param,
   UseGuards,
 } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+} from '@nestjs/swagger';
 import { MovimentacoesEstoqueService } from './movimentacoes-estoque.service';
 import { CreateMovimentacaoEstoqueDto } from './dto/create-movimentacao-estoque.dto';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 
+@ApiTags('Estoque & Catálogo')
+@ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard, TenantGuard)
 @Controller('movimentacoes-estoque')
 export class MovimentacoesEstoqueController {
@@ -19,7 +28,11 @@ export class MovimentacoesEstoqueController {
     private readonly movimentacoesService: MovimentacoesEstoqueService,
   ) {}
 
-  // POST /movimentacoes-estoque -> Registra entrada, saída, perda ou ajuste
+  @ApiOperation({
+    summary: 'Registrar movimentação de estoque',
+    description: 'Registra manualmente uma entrada, saída, perda ou ajuste de inventário.',
+  })
+  @ApiResponse({ status: 201, description: 'Movimentação registrada com sucesso.' })
   @Post()
   create(
     @CurrentTenant() empresaId: number,
@@ -28,13 +41,22 @@ export class MovimentacoesEstoqueController {
     return this.movimentacoesService.create(empresaId, createDto);
   }
 
-  // GET /movimentacoes-estoque -> Lista o histórico de movimentações da empresa
+  @ApiOperation({
+    summary: 'Listar histórico de movimentações',
+    description: 'Retorna a auditoria completa de entradas e saídas de estoque.',
+  })
+  @ApiResponse({ status: 200, description: 'Histórico retornado com sucesso.' })
   @Get()
   findAll(@CurrentTenant() empresaId: number) {
     return this.movimentacoesService.findAll(empresaId);
   }
 
-  // GET /movimentacoes-estoque/:id -> Detalhes de uma movimentação
+  @ApiOperation({
+    summary: 'Buscar movimentação por ID',
+    description: 'Retorna os detalhes de uma movimentação específica.',
+  })
+  @ApiParam({ name: 'id', description: 'ID da movimentação' })
+  @ApiResponse({ status: 200, description: 'Movimentação encontrada.' })
   @Get(':id')
   findOne(
     @CurrentTenant() empresaId: number,

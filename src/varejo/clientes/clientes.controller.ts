@@ -1,4 +1,3 @@
-// Importamos os decoradores HTTP do NestJS e as proteções de segurança
 import {
   Controller,
   Get,
@@ -9,23 +8,32 @@ import {
   Delete,
   UseGuards,
 } from '@nestjs/common';
-// Importamos o serviço de clientes
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+} from '@nestjs/swagger';
 import { ClientesService } from './clientes.service';
-// Importamos os DTOs
 import { CreateClienteDto } from './dto/create-cliente.dto';
 import { UpdateClienteDto } from './dto/update-cliente.dto';
-// Importamos os Guards de autenticação e isolamento por empresa
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 
-// Exige token JWT autenticado e validação de empresa para acessar qualquer rota de clientes
+@ApiTags('Clientes & Fiados')
+@ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard, TenantGuard)
 @Controller('clientes')
 export class ClientesController {
   constructor(private readonly clientesService: ClientesService) {}
 
-  // POST /clientes -> Cadastra um novo cliente com injeção segura de empresaId
+  @ApiOperation({
+    summary: 'Cadastrar novo cliente',
+    description: 'Regista um novo cliente com limite de crédito e controlo de vasilhames em posse.',
+  })
+  @ApiResponse({ status: 201, description: 'Cliente criado com sucesso.' })
   @Post()
   create(
     @CurrentTenant() empresaId: number,
@@ -34,13 +42,23 @@ export class ClientesController {
     return this.clientesService.create(empresaId, createClienteDto);
   }
 
-  // GET /clientes -> Retorna a lista de todos os clientes da empresa
+  @ApiOperation({
+    summary: 'Listar todos os clientes',
+    description: 'Retorna a lista de clientes vinculados à empresa ativa.',
+  })
+  @ApiResponse({ status: 200, description: 'Lista de clientes retornada com sucesso.' })
   @Get()
   findAll(@CurrentTenant() empresaId: number) {
     return this.clientesService.findAll(empresaId);
   }
 
-  // GET /clientes/:id -> Busca os dados de um cliente pelo ID
+  @ApiOperation({
+    summary: 'Buscar cliente por ID',
+    description: 'Retorna os detalhes cadastrais e financeiros de um cliente.',
+  })
+  @ApiParam({ name: 'id', description: 'ID do cliente' })
+  @ApiResponse({ status: 200, description: 'Cliente encontrado.' })
+  @ApiResponse({ status: 404, description: 'Cliente não encontrado.' })
   @Get(':id')
   findOne(
     @CurrentTenant() empresaId: number,
@@ -49,7 +67,12 @@ export class ClientesController {
     return this.clientesService.findOne(empresaId, id);
   }
 
-  // PATCH /clientes/:id -> Atualiza os dados de um cliente existente
+  @ApiOperation({
+    summary: 'Atualizar dados do cliente',
+    description: 'Altera os dados do cliente, limite de crédito ou endereço.',
+  })
+  @ApiParam({ name: 'id', description: 'ID do cliente' })
+  @ApiResponse({ status: 200, description: 'Cliente atualizado com sucesso.' })
   @Patch(':id')
   update(
     @CurrentTenant() empresaId: number,
@@ -59,7 +82,12 @@ export class ClientesController {
     return this.clientesService.update(empresaId, id, updateClienteDto);
   }
 
-  // DELETE /clientes/:id -> Exclui o cadastro de um cliente
+  @ApiOperation({
+    summary: 'Remover cliente',
+    description: 'Exclui o cadastro de um cliente.',
+  })
+  @ApiParam({ name: 'id', description: 'ID do cliente' })
+  @ApiResponse({ status: 200, description: 'Cliente removido com sucesso.' })
   @Delete(':id')
   remove(
     @CurrentTenant() empresaId: number,
