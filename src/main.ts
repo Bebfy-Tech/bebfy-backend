@@ -2,6 +2,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { PrismaExceptionFilter } from './core/filters/prisma-exception.filter';
 
 async function bootstrap() {
@@ -36,8 +37,11 @@ async function bootstrap() {
     }),
   );
 
-  // 3. Filtro Global de Tratamento de Erros do Prisma
-  app.useGlobalFilters(new PrismaExceptionFilter());
+  // 3. Filtros Globais de Tratamento de Erros (AllExceptionsFilter para erros gerais + PrismaExceptionFilter para o Prisma)
+  app.useGlobalFilters(
+    new AllExceptionsFilter(),
+    new PrismaExceptionFilter(),
+  );
 
   // 4. Documentação Swagger com suporte a Autenticação Bearer (JWT)
   const config = new DocumentBuilder()
