@@ -2,10 +2,14 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { validateEnv } from './common/env/env.schema';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { PrismaExceptionFilter } from './core/filters/prisma-exception.filter';
 
 async function bootstrap() {
+  // 0. Validação estrita das variáveis de ambiente no boot da aplicação
+  validateEnv();
+
   const app = await NestFactory.create(AppModule);
 
   // 1. Configuração de CORS (suporte ao ambiente local, subdomínios do Bebfy e frontend configurado no .env)
