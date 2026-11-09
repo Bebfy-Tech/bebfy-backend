@@ -19,7 +19,9 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - name: Install
-        run: npm ci
+        run: npm ci --legacy-peer-deps
+        # Temporário: lockfile contém @nestjs/observe incompatível com NestJS 10.
+        # Remover a dependência não utilizada e regenerar package-lock.json.
       - name: Build
         run: npm run build
       - name: Lint
