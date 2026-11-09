@@ -22,8 +22,8 @@ import { CurrentTenant } from '../../common/decorators/current-tenant.decorator'
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  // Rate Limiting Estrito: Bloqueia após 5 tentativas de login em 1 minuto
-  @Throttle({ strict: { limit: 5, ttl: 60000 } })
+  // Login inicial e confirmação de troca de sessão compartilham a mesma janela.
+  @Throttle({ strict: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   @Post('login')
   async login(
