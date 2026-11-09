@@ -54,7 +54,7 @@ export class AuthService {
     }
 
     const empresa = usuario.funcionario.empresa;
-    if (empresa.status !== 'ATIVA') {
+    if (!['ATIVA', 'EM_TESTE'].includes(empresa.status)) {
       throw new UnauthorizedException('Empresa inativa.');
     }
 
