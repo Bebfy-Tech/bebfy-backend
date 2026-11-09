@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CreateFiadoDto } from './dto/create-fiado.dto';
@@ -53,12 +54,18 @@ export class FiadosService {
       if (novoSaldo < 0) {
         throw new BadRequestException('Crédito superior ao saldo devedor.');
       }
-      await tx.cliente.update({
-        where: { id: createFiadoDto.clienteId },
-        data: {
-          saldoDevedor: novoSaldo,
+      const alteracao = await tx.cliente.updateMany({
+        where: {
+          id: createFiadoDto.clienteId,
+          empresaId,
+          ativo: true,
+          saldoDevedor: { equals: cliente.saldoDevedor },
         },
+        data: { saldoDevedor: novoSaldo },
       });
+      if (alteracao.count !== 1) {
+        throw new ConflictException('O saldo do cliente mudou. Repita a operação para evitar duplicidade.');
+      }
 
       return tx.historicoFiado.create({
         data: {
@@ -87,8 +94,6 @@ export class FiadosService {
       if (valorNum > Number(cliente.saldoDevedor)) {
         throw new BadRequestException('Pagamento superior ao saldo devedor do cliente.');
       }
-      const novoSaldo = Number(cliente.saldoDevedor) - valorNum;
-
       const abatimento = await tx.cliente.updateMany({
         where: { id: clienteId, empresaId, saldoDevedor: { gte: valorNum } },
         data: { saldoDevedor: { decrement: valorNum } },
@@ -96,6 +101,11 @@ export class FiadosService {
       if (abatimento.count !== 1) {
         throw new BadRequestException('Saldo insuficiente ou alterado durante o pagamento.');
       }
+
+      const clienteAtualizado = await tx.cliente.findUniqueOrThrow({
+        where: { id: clienteId }, select: { saldoDevedor: true },
+      });
+      const novoSaldo = Number(clienteAtualizado.saldoDevedor);
 
       const historico = await tx.historicoFiado.create({
         data: {
