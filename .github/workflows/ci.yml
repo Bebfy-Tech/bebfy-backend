@@ -49,6 +49,7 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql://bebfy_test:test-only-password@localhost:5432/bebfy_test?schema=public
+      JWT_SECRET: ci-test-only-not-a-production-secret-at-least-32-characters
     steps:
       - name: Checkout
         uses: actions/checkout@v4
