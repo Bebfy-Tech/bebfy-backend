@@ -40,6 +40,9 @@ export class TenantMiddleware implements NestMiddleware {
           );
         }
 
+        if (empresa.inadimplente && (!empresa.liberacaoFinanceiraAte || empresa.liberacaoFinanceiraAte.getTime() <= Date.now())) {
+          throw new NotFoundException('Acesso temporariamente bloqueado por pendência financeira. Entre em contato com a administração Bebfy.');
+        }
         (req as any).empresa = empresa;
       }
 
