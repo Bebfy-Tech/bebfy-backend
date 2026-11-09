@@ -36,6 +36,7 @@ export class LotesController {
     description: 'Dá entrada num lote com data de validade e quantidade.',
   })
   @ApiResponse({ status: 201, description: 'Lote criado com sucesso.' })
+  @ExigirPermissao('ESTOQUE_AJUSTAR')
   @Post()
   create(
     @CurrentTenant() empresaId: number,
