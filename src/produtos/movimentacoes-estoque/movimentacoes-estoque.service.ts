@@ -55,14 +55,17 @@ export class MovimentacoesEstoqueService {
         } as any,
       });
 
-      await tx.produto.update({
-        where: { id: createDto.produtoId },
-        data: {
-          estoqueAtual: {
-            increment: deltaEstoque,
-          },
+      const atualizacao = await tx.produto.updateMany({
+        where: {
+          id: createDto.produtoId,
+          empresaId,
+          ...(ehSaida ? { estoqueAtual: { gte: createDto.quantidade } } : {}),
         },
+        data: { estoqueAtual: { increment: deltaEstoque } },
       });
+      if (atualizacao.count !== 1) {
+        throw new BadRequestException('Saldo insuficiente ou produto indisponível durante a movimentação.');
+      }
 
       return tx.movimentacaoEstoque.findUnique({
         where: { id: movimentacao.id },
