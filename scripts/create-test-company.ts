@@ -2,8 +2,8 @@ import { PrismaClient, StatusEmpresa, TipoPlano } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
-const nome = 'bebfytesBDteste';
-const slug = 'bebfytesbdteste';
+const nome = 'bebfyBDteste';
+const slug = 'bebfybdteste';
 
 function obrigatoria(nome: string): string {
   const valor = process.env[nome]?.trim();
@@ -25,7 +25,11 @@ async function main() {
   if (!/^\d{14}$/.test(cnpj)) throw new Error('BEBFY_TEST_CNPJ precisa ter 14 dígitos.');
   if (!/^\d{11}$/.test(cpf)) throw new Error('BEBFY_TEST_OWNER_CPF precisa ter 11 dígitos.');
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('BEBFY_TEST_OWNER_EMAIL inválido.');
-  if (senha.length < 12) throw new Error('BEBFY_TEST_OWNER_PASSWORD precisa ter pelo menos 12 caracteres.');
+  const senhaCurtaTeste = process.env.BEBFY_ALLOW_WEAK_DEMO_PASSWORD === 'true' &&
+    process.env.NODE_ENV !== 'production' && senha === '12345';
+  if (senha.length < 12 && !senhaCurtaTeste) {
+    throw new Error('Use senha de pelo menos 12 caracteres. A senha curta 12345 só é autorizada explicitamente no teste local isolado.');
+  }
 
   // Never silently change a company that might already have been created through the SaaS UI.
   const existente = await prisma.empresa.findUnique({ where: { slug } });
@@ -63,7 +67,7 @@ async function main() {
         empresaId: empresa.id, codigo: 1, nome: responsavel, cpf, telefone,
         cargo: 'PROPRIETARIO',
         usuario: {
-          create: { email, senha: hash, ativo: true, permissoes: [] },
+          create: { email, senha: hash, ativo: true, permissoes: [], primeiroAcesso: true },
         },
       },
       select: { id: true, codigo: true, usuario: { select: { id: true } } },
