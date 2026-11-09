@@ -63,3 +63,5 @@ jobs:
         run: npx prisma validate
       - name: Apply all migrations on clean PostgreSQL
         run: npx prisma migrate deploy
+      - name: PostgreSQL multi-tenant and concurrent sales integration tests
+        run: npm run test:integration
