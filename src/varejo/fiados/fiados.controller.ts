@@ -10,13 +10,15 @@ import { FiadosService } from './fiados.service';
 import { CreateFiadoDto } from './dto/create-fiado.dto';
 import { PagarFiadoDto } from './dto/pagar-fiado.dto';
 import { ExigirPermissao, PermissoesGuard } from '../../common/guards/permissoes.guard';
+import { ExigirModulo, ModuloAtivoGuard } from '../../common/guards/modulo-ativo.guard';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 
 @ApiTags('Clientes & Fiados')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard, TenantGuard, PermissoesGuard)
+@UseGuards(JwtAuthGuard, TenantGuard, PermissoesGuard, ModuloAtivoGuard)
+@ExigirModulo('FIADOS')
 @Controller('fiados')
 export class FiadosController {
   constructor(private readonly fiadosService: FiadosService) {}
