@@ -80,7 +80,9 @@ export class AuthService {
       };
     }
 
-    if (usuario.sessaoId && !dto.assumirSessao) {
+    const atividadeRecente = usuario.ultimaAtividadeEm &&
+      Date.now() - usuario.ultimaAtividadeEm.getTime() < 2 * 60 * 1000;
+    if (usuario.sessaoId && atividadeRecente && !dto.assumirSessao) {
       throw new ConflictException({
         codigo: 'SESSAO_ATIVA',
         message: 'Já existe uma sessão ativa neste usuário. Deseja entrar e desconectar o outro acesso?',
@@ -90,7 +92,7 @@ export class AuthService {
     const novaSessao = randomUUID();
     const result = await this.prisma.usuario.updateMany({
       where: { id: usuario.id, ativo: true, sessaoId: usuario.sessaoId },
-      data: { sessaoId: novaSessao },
+      data: { sessaoId: novaSessao, ultimaAtividadeEm: new Date() },
     });
     if (result.count !== 1) {
       throw new ConflictException({
@@ -132,7 +134,7 @@ export class AuthService {
     const sessaoId = randomUUID();
     const result = await this.prisma.usuario.updateMany({
       where: { id: usuario.id, ativo: true, primeiroAcesso: true, senha: usuario.senha },
-      data: { senha: hash, primeiroAcesso: false, sessaoId },
+      data: { senha: hash, primeiroAcesso: false, sessaoId, ultimaAtividadeEm: new Date() },
     });
     if (result.count !== 1) {
       throw new ConflictException('Senha já alterada em outra solicitação. Entre novamente.');
@@ -156,7 +158,7 @@ export class AuthService {
     }
     const result = await this.prisma.usuario.updateMany({
       where: { id: usuarioId, sessaoId, senha: usuario.senha },
-      data: { senha: await bcrypt.hash(dto.novaSenha, 12), sessaoId: randomUUID() },
+      data: { senha: await bcrypt.hash(dto.novaSenha, 12), sessaoId: randomUUID(), ultimaAtividadeEm: null },
     });
     if (!result.count) throw new ConflictException('Senha ou sessão alterada em outro acesso.');
     return { alterada: true, mensagem: 'Senha alterada. Faça login novamente.' };
@@ -165,7 +167,7 @@ export class AuthService {
   async sair(usuarioId: string, sessaoId: string) {
     await this.prisma.usuario.updateMany({
       where: { id: usuarioId, sessaoId },
-      data: { sessaoId: null },
+      data: { sessaoId: null, ultimaAtividadeEm: null },
     });
     return { encerrada: true };
   }
