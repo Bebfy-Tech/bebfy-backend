@@ -9,13 +9,14 @@ import {
 import { FiadosService } from './fiados.service';
 import { CreateFiadoDto } from './dto/create-fiado.dto';
 import { PagarFiadoDto } from './dto/pagar-fiado.dto';
+import { ExigirPermissao, PermissoesGuard } from '../../common/guards/permissoes.guard';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 
 @ApiTags('Clientes & Fiados')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, TenantGuard, PermissoesGuard)
 @Controller('fiados')
 export class FiadosController {
   constructor(private readonly fiadosService: FiadosService) {}
@@ -25,6 +26,7 @@ export class FiadosController {
     description: 'Registra uma cobrança no saldo devedor do cliente.',
   })
   @ApiResponse({ status: 201, description: 'Débito lançado com sucesso.' })
+  @ExigirPermissao('FIADOS_LANCAR')
   @Post()
   create(
     @CurrentTenant() empresaId: number,
@@ -39,6 +41,7 @@ export class FiadosController {
   })
   @ApiParam({ name: 'clienteId', description: 'ID do cliente' })
   @ApiResponse({ status: 201, description: 'Pagamento abatido com sucesso.' })
+  @ExigirPermissao('FIADOS_RECEBER')
   @Post('pagar/:clienteId')
   registrarPagamento(
     @CurrentTenant() empresaId: number,
