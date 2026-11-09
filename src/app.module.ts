@@ -22,9 +22,13 @@ import { CategoriasModule } from './produtos/categorias/categorias.module';
 import { LotesModule } from './produtos/lotes/lotes.module';
 import { FornecedoresModule } from './produtos/fornecedores/fornecedores.module';
 import { MovimentacoesEstoqueModule } from './produtos/movimentacoes-estoque/movimentacoes-estoque.module';
+import { VasilhamesModule } from './produtos/vasilhames/vasilhames.module';
 
 // Relatórios
 import { RelatoriosModule } from './relatorios/relatorios.module';
+import { FinanceiroModule } from './financeiro/financeiro.module';
+import { SaasModule } from './saas/saas.module';
+import { ImportacaoXmlModule } from './produtos/importacao-xml/importacao-xml.module';
 
 @Module({
   imports: [
@@ -37,8 +41,8 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
       },
       {
         name: 'strict',
-        ttl: 60000,  // 1 minuto
-        limit: 5,    // Máximo de 5 tentativas de login por IP por minuto
+        ttl: 60000,
+        limit: 100,  // Fallback global; endpoints sensíveis definem 5/10 com @Throttle.
       },
     ]),
 
@@ -59,9 +63,13 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
     LotesModule,
     FornecedoresModule,
     MovimentacoesEstoqueModule,
+    VasilhamesModule,
 
     // Relatórios
     RelatoriosModule,
+    FinanceiroModule,
+    SaasModule,
+    ImportacaoXmlModule,
   ],
   providers: [
     {

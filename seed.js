@@ -32,7 +32,14 @@ async function main() {
     },
   });
 
-  const senhaHash = await bcrypt.hash('123456', 10);
+  const senhaInicial = process.env.BEBFY_SEED_ADMIN_PASSWORD;
+  if (!senhaInicial || senhaInicial.length < 12) {
+    throw new Error('Defina BEBFY_SEED_ADMIN_PASSWORD (mínimo 12 caracteres) apenas para ambiente de teste.');
+  }
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Seed demonstrativo bloqueado em produção.');
+  }
+  const senhaHash = await bcrypt.hash(senhaInicial, 12);
   await prisma.usuario.create({
     data: {
       email: 'admin@bebfy.com',

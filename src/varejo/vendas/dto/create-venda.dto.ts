@@ -5,6 +5,9 @@ import {
   IsEnum,
   IsNotEmpty,
   IsNumber,
+  IsPositive,
+  Min,
+  ArrayMinSize,
   IsOptional,
   IsString,
   ValidateNested,
@@ -18,10 +21,12 @@ export class CreateItemVendaDto {
 
   @IsNumber({}, { message: 'A quantidade deve ser um número.' })
   @IsNotEmpty({ message: 'A quantidade é obrigatória.' })
+  @IsPositive()
   quantidade: number;
 
   @IsNumber({}, { message: 'O preço unitário deve ser um número.' })
   @IsNotEmpty({ message: 'O preço unitário é obrigatório.' })
+  @Min(0)
   precoUnitario: number;
 
   @IsOptional()
@@ -36,10 +41,12 @@ export class CreatePagamentoVendaDto {
 
   @IsNumber({}, { message: 'O valor do pagamento deve ser um número.' })
   @IsNotEmpty({ message: 'O valor do pagamento é obrigatório.' })
+  @IsPositive()
   valor: number;
 
   @IsOptional()
   @IsNumber({}, { message: 'O troco deve ser um número.' })
+  @Min(0)
   troco?: number;
 }
 
@@ -58,6 +65,7 @@ export class CreateVendaDto {
 
   @IsNumber({}, { message: 'O valor do desconto deve ser um número.' })
   @IsOptional()
+  @Min(0)
   desconto?: number;
 
   @IsEnum(TipoEntrega, { message: 'Tipo de entrega inválido.' })
@@ -66,6 +74,7 @@ export class CreateVendaDto {
 
   @IsNumber({}, { message: 'A taxa de entrega deve ser um número.' })
   @IsOptional()
+  @Min(0)
   taxaEntrega?: number;
 
   @IsString({ message: 'O endereço de entrega deve ser um texto.' })
@@ -74,15 +83,18 @@ export class CreateVendaDto {
 
   @IsOptional()
   @IsNumber({}, { message: 'A quantidade de cascos devolvidos deve ser um número.' })
+  @Min(0)
   cascosDevolvidos?: number;
 
   @IsArray({ message: 'Os itens devem ser uma lista.' })
   @ValidateNested({ each: true })
   @Type(() => CreateItemVendaDto)
+  @ArrayMinSize(1)
   itens: CreateItemVendaDto[];
 
   @IsArray({ message: 'Os pagamentos devem ser uma lista.' })
   @ValidateNested({ each: true })
   @Type(() => CreatePagamentoVendaDto)
+  @ArrayMinSize(1)
   pagamentos: CreatePagamentoVendaDto[];
 }

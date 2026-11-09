@@ -18,13 +18,16 @@ import {
 import { FornecedoresService } from './fornecedores.service';
 import { CreateFornecedorDto } from './dto/create-fornecedor.dto';
 import { UpdateFornecedorDto } from './dto/update-fornecedor.dto';
+import { ExigirModulo, ModuloAtivoGuard } from '../../common/guards/modulo-ativo.guard';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
+import { ExigirPermissao, PermissoesGuard } from '../../common/guards/permissoes.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 
 @ApiTags('Estoque & Catálogo')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, TenantGuard, PermissoesGuard, ModuloAtivoGuard)
+@ExigirModulo('COMPRAS_FORNECEDORES')
 @Controller('fornecedores')
 export class FornecedoresController {
   constructor(private readonly fornecedoresService: FornecedoresService) {}
@@ -34,6 +37,7 @@ export class FornecedoresController {
     description: 'Regista um fornecedor (ex: Ambev, Heineken, Coca-Cola).',
   })
   @ApiResponse({ status: 201, description: 'Fornecedor cadastrado com sucesso.' })
+  @ExigirPermissao('FORNECEDORES_GERENCIAR')
   @Post()
   create(
     @CurrentTenant() empresaId: number,
@@ -72,6 +76,7 @@ export class FornecedoresController {
   })
   @ApiParam({ name: 'id', description: 'ID do fornecedor' })
   @ApiResponse({ status: 200, description: 'Fornecedor atualizado com sucesso.' })
+  @ExigirPermissao('FORNECEDORES_GERENCIAR')
   @Patch(':id')
   update(
     @CurrentTenant() empresaId: number,
@@ -87,6 +92,7 @@ export class FornecedoresController {
   })
   @ApiParam({ name: 'id', description: 'ID do fornecedor' })
   @ApiResponse({ status: 200, description: 'Fornecedor removido com sucesso.' })
+  @ExigirPermissao('FORNECEDORES_GERENCIAR')
   @Delete(':id')
   remove(
     @CurrentTenant() empresaId: number,

@@ -17,13 +17,16 @@ import {
 } from '@nestjs/swagger';
 import { LotesService } from './lotes.service';
 import { CreateLoteDto } from './dto/create-lote.dto';
+import { ExigirPermissao, PermissoesGuard } from '../../common/guards/permissoes.guard';
+import { ExigirModulo, ModuloAtivoGuard } from '../../common/guards/modulo-ativo.guard';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 
 @ApiTags('Estoque & Catálogo')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, TenantGuard, PermissoesGuard, ModuloAtivoGuard)
+@ExigirModulo('ESTOQUE_LOTES')
 @Controller('lotes')
 export class LotesController {
   constructor(private readonly lotesService: LotesService) {}
@@ -33,6 +36,7 @@ export class LotesController {
     description: 'Dá entrada num lote com data de validade e quantidade.',
   })
   @ApiResponse({ status: 201, description: 'Lote criado com sucesso.' })
+  @ExigirPermissao('ESTOQUE_AJUSTAR')
   @Post()
   create(
     @CurrentTenant() empresaId: number,
@@ -71,6 +75,7 @@ export class LotesController {
   })
   @ApiParam({ name: 'id', description: 'ID numérico do lote' })
   @ApiResponse({ status: 200, description: 'Lote removido com sucesso.' })
+  @ExigirPermissao('LOTES_REMOVER')
   @Delete(':id')
   remove(
     @CurrentTenant() empresaId: number,

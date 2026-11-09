@@ -1,86 +1,79 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Delete,
-  UseGuards,
-} from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-  ApiParam,
-} from '@nestjs/swagger';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { FuncionariosService } from './funcionarios.service';
 import { CreateFuncionarioDto } from './dto/create-funcionario.dto';
 import { UpdateFuncionarioDto } from './dto/update-funcionario.dto';
+import { ConfigurarAcessoDto } from './dto/configurar-acesso.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { TenantGuard } from '../../common/guards/tenant.guard';
+import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 
 @ApiTags('Gestão & Equipa')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantGuard)
 @Controller('funcionarios')
 export class FuncionariosController {
   constructor(private readonly funcionariosService: FuncionariosService) {}
 
-  @ApiOperation({
-    summary: 'Cadastrar novo funcionário',
-    description: 'Regista um novo colaborador na equipa.',
-  })
-  @ApiResponse({ status: 201, description: 'Funcionário cadastrado com sucesso.' })
+  private exigirGestor(req: any): void {
+    if (!['GERENTE', 'ADMINISTRADOR', 'PROPRIETARIO'].includes(req.user?.cargo)) {
+      throw new ForbiddenException('Apenas gestores podem administrar funcionários.');
+    }
+  }
+
+  private validarCargoSolicitado(req: any, cargo?: string): void {
+    if (!cargo) return;
+    if (cargo === 'PROPRIETARIO' && req.user?.cargo !== 'PROPRIETARIO') {
+      throw new ForbiddenException('Somente proprietários podem atribuir cargo de proprietário.');
+    }
+    if (cargo === 'ADMINISTRADOR' && req.user?.cargo === 'GERENTE') {
+      throw new ForbiddenException('Gerentes não podem atribuir cargo de administrador.');
+    }
+  }
+
+  private async validarAlvo(req: any, empresaId: number, id: string): Promise<void> {
+    const funcionario = await this.funcionariosService.findOne(id, empresaId);
+    this.validarCargoSolicitado(req, funcionario.cargo);
+  }
+
   @Post()
-  create(@Body() createFuncionarioDto: CreateFuncionarioDto) {
-    return this.funcionariosService.create(createFuncionarioDto);
+  create(@CurrentTenant() empresaId: number, @Req() req: any, @Body() dto: CreateFuncionarioDto) {
+    this.exigirGestor(req);
+    this.validarCargoSolicitado(req, dto.cargo);
+    return this.funcionariosService.create(dto, empresaId);
   }
 
-  @ApiOperation({
-    summary: 'Listar todos os funcionários',
-    description: 'Retorna a lista completa de funcionários.',
-  })
-  @ApiResponse({ status: 200, description: 'Lista de funcionários retornada.' })
   @Get()
-  findAll() {
-    return this.funcionariosService.findAll();
+  findAll(@CurrentTenant() empresaId: number, @Req() req: any) {
+    this.exigirGestor(req);
+    return this.funcionariosService.findAll(empresaId);
   }
 
-  @ApiOperation({
-    summary: 'Buscar funcionário por ID',
-    description: 'Retorna os detalhes de um funcionário específico.',
-  })
-  @ApiParam({ name: 'id', description: 'ID do funcionário' })
-  @ApiResponse({ status: 200, description: 'Funcionário encontrado.' })
-  @ApiResponse({ status: 404, description: 'Funcionário não encontrado.' })
+  @Post(':id/acesso')
+  async configurarAcesso(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string, @Body() dto: ConfigurarAcessoDto) {
+    this.exigirGestor(req);
+    await this.validarAlvo(req, empresaId, id);
+    return this.funcionariosService.configurarAcesso(id, empresaId, dto);
+  }
+
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.funcionariosService.findOne(id);
+  findOne(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string) {
+    this.exigirGestor(req);
+    return this.funcionariosService.findOne(id, empresaId);
   }
 
-  @ApiOperation({
-    summary: 'Atualizar dados de um funcionário',
-    description: 'Altera os dados cadastrais ou permissões de um funcionário.',
-  })
-  @ApiParam({ name: 'id', description: 'ID do funcionário' })
-  @ApiResponse({ status: 200, description: 'Funcionário atualizado com sucesso.' })
   @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Body() updateFuncionarioDto: UpdateFuncionarioDto,
-  ) {
-    return this.funcionariosService.update(id, updateFuncionarioDto);
+  async update(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string, @Body() dto: UpdateFuncionarioDto) {
+    this.exigirGestor(req);
+    await this.validarAlvo(req, empresaId, id);
+    this.validarCargoSolicitado(req, dto.cargo);
+    return this.funcionariosService.update(id, dto, empresaId);
   }
 
-  @ApiOperation({
-    summary: 'Remover funcionário',
-    description: 'Exclui o registo de um funcionário.',
-  })
-  @ApiParam({ name: 'id', description: 'ID do funcionário' })
-  @ApiResponse({ status: 200, description: 'Funcionário removido com sucesso.' })
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.funcionariosService.remove(id);
+  async remove(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string) {
+    this.exigirGestor(req);
+    await this.validarAlvo(req, empresaId, id);
+    return this.funcionariosService.remove(id, empresaId);
   }
 }

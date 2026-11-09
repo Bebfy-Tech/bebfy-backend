@@ -9,21 +9,26 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'segredo_super_secreto',
+      secretOrKey: process.env.JWT_SECRET as string,
     });
   }
 
-  async validate(payload: { sub: string; email: string; empresaId?: number }) {
+  async validate(payload: { sub: string; email: string; empresaId?: number; sessaoId?: string; proposito?: string }) {
     const usuario = await this.prisma.usuario.findUnique({
       where: { id: payload.sub },
       select: {
         id: true,
+        ativo: true,
         email: true,
         permissoes: true,
+        sessaoId: true,
+        ultimaAtividadeEm: true,
+        primeiroAcesso: true,
         funcionarioId: true,
         funcionario: {
           select: {
             id: true,
+            ativo: true,
             nome: true,
             cargo: true,
             empresaId: true,
@@ -34,6 +39,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
                 subdominio: true,
                 slug: true,
                 status: true,
+              inadimplente: true,
+              liberacaoFinanceiraAte: true,
               },
             },
           },
@@ -41,18 +48,32 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       },
     });
 
-    if (!usuario || !usuario.funcionario) {
+    if (!usuario || !usuario.ativo || !usuario.funcionario || !usuario.funcionario.ativo ||
+        usuario.primeiroAcesso || !payload.sessaoId || !usuario.sessaoId ||
+        payload.sessaoId !== usuario.sessaoId || payload.proposito === 'PRIMEIRO_ACESSO') {
       throw new UnauthorizedException('Utilizador não encontrado ou sem vínculo de funcionário.');
     }
 
-    if (usuario.funcionario.empresa.status !== 'ATIVA') {
+    if (payload.empresaId !== usuario.funcionario.empresaId || !['ATIVA', 'EM_TESTE'].includes(usuario.funcionario.empresa.status)) {
       throw new UnauthorizedException('A empresa vinculada a este utilizador encontra-se inativa.');
+    }
+
+    if (usuario.funcionario.empresa.inadimplente && (!usuario.funcionario.empresa.liberacaoFinanceiraAte || usuario.funcionario.empresa.liberacaoFinanceiraAte.getTime() <= Date.now())) {
+      throw new UnauthorizedException('Acesso bloqueado por pendência financeira.');
+    }
+
+    if (!usuario.ultimaAtividadeEm ||
+        Date.now() - usuario.ultimaAtividadeEm.getTime() > 30000) {
+      await this.prisma.usuario.updateMany({
+        where: { id: usuario.id, sessaoId: payload.sessaoId },
+        data: { ultimaAtividadeEm: new Date() },
+      });
     }
 
     return {
       ...usuario,
       empresaId: usuario.funcionario.empresaId,
-      subdominio: (usuario.funcionario.empresa as any).subdominio || usuario.funcionario.empresa.slug,
+      subdominio: usuario.funcionario.empresa.subdominio || usuario.funcionario.empresa.slug,
       cargo: usuario.funcionario.cargo,
     };
   }

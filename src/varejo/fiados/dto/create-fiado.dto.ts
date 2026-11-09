@@ -3,6 +3,7 @@ import {
   IsEnum,
   IsNotEmpty,
   IsNumber,
+  IsPositive,
   IsOptional,
   IsString,
 } from 'class-validator';
@@ -29,6 +30,7 @@ export class CreateFiadoDto {
   // Valor do lançamento em reais (R$) - Campo Obrigatório
   @IsNumber({}, { message: 'O valor deve ser um número válido.' })
   @IsNotEmpty({ message: 'O valor da transação é obrigatório.' })
+  @IsPositive()
   valor: number;
 
   // Descrição/Observação (ex: "Pagamento parcial em PIX", "Fiado referente à compra de fardos") - Opcional

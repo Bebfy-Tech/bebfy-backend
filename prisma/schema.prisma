@@ -48,6 +48,27 @@ enum NomeModulo {
   RELATORIOS_AVANCADOS
 }
 
+
+enum SaasCargo {
+  SUPER_ADMIN
+  OPERADOR
+}
+
+model SaasOperador {
+  id          String    @id @default(uuid())
+  codigo      Int       @unique
+  nome        String
+  senha       String
+  cargo       SaasCargo @default(OPERADOR)
+  permissoes  String[]  @default([])
+  ativo       Boolean   @default(true)
+  sessaoId    String?
+  criadoEm    DateTime  @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@map("saas_operadores")
+}
+
 model Empresa {
   id                   Int                   @id @default(autoincrement())
   nomeFantasia         String
@@ -56,6 +77,9 @@ model Empresa {
   slug                 String                @unique
   subdominio           String?               @unique
   status               StatusEmpresa         @default(ATIVA)
+  inadimplente         Boolean               @default(false)
+  liberacaoFinanceiraAte DateTime?
+  historicoLiberacoes  SaasLiberacaoAcesso[]
   planoId              Int?
   plano                Plano?                @relation(fields: [planoId], references: [id])
   criadoEm             DateTime              @default(now())
@@ -79,6 +103,20 @@ model Empresa {
   logsAuditoria        LogAuditoria[]
 
   @@map("empresas")
+}
+
+model SaasLiberacaoAcesso {
+  id          String   @id @default(uuid())
+  empresaId   Int
+  empresa     Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  operadorId  String
+  dias        Int
+  motivo      String
+  liberadoAte DateTime
+  criadoEm    DateTime @default(now())
+
+  @@index([empresaId, criadoEm])
+  @@map("saas_liberacoes_acesso")
 }
 
 model Plano {
@@ -148,8 +186,13 @@ model Usuario {
   funcionarioId String      @unique
   funcionario   Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
   permissoes    String[]
+  primeiroAcesso Boolean @default(false)
+  sessaoId      String?
+  ultimaAtividadeEm DateTime?
   criadoEm      DateTime    @default(now())
   atualizadoEm  DateTime    @updatedAt
+
+  @@index([sessaoId])
 }
 
 // ====================================================
@@ -256,6 +299,8 @@ model Fornecedor {
   nomeFantasia String?
   telefone     String?
   email        String?
+  inscricaoEstadual String?
+  endereco     String?
   observacao   String?      // Campo de observação no rodapé
   criadoEm     DateTime     @default(now())
 
@@ -462,6 +507,7 @@ model ItemVenda {
   quantidade    Int
   precoUnitario Decimal
   precoTotal    Decimal
+  unidadesEstoque Int?      // Quantidade real de unidades abatidas (fardos inclusos)
   criadoEm      DateTime @default(now())
 }
 

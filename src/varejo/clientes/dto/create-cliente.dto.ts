@@ -1,6 +1,5 @@
 // Importamos os validadores do class-validator para garantir a consistência dos dados do cliente
 import {
-  IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -33,13 +32,7 @@ export class CreateClienteDto {
   @IsOptional()
   limiteCredito?: number;
 
-  // Saldo que o cliente deve atualmente na loja - Opcional (Default no banco é 0.00)
-  @IsNumber({}, { message: 'O saldo devedor deve ser um valor numérico.' })
-  @IsOptional()
-  saldoDevedor?: number;
+  // O saldo devedor e os cascos em posse são calculados pelos módulos
+  // FIADOS e VASILHAMES. Nunca aceitar esses saldos pelo cadastro comum.
 
-  // Quantidade de garrafas/cascos retornáveis que estão atualmente com o cliente - Opcional (Default é 0)
-  @IsInt({ message: 'A quantidade de cascos deve ser um número inteiro.' })
-  @IsOptional()
-  cascosEmPosse?: number;
 }

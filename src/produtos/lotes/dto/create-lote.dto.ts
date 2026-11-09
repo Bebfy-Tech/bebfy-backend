@@ -1,6 +1,7 @@
 import {
   IsDateString,
   IsInt,
+  Min,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -14,6 +15,7 @@ export class CreateLoteDto {
 
   @IsInt({ message: 'A quantidade deve ser um número inteiro.' })
   @IsNotEmpty({ message: 'A quantidade do lote é obrigatória.' })
+  @Min(1)
   quantidade: number;
 
   @IsString({ message: 'O número do lote deve ser um texto.' })
