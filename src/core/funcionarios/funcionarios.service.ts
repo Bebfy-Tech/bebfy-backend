@@ -71,11 +71,12 @@ export class FuncionariosService {
       return tx.usuario.upsert({
         where: { funcionarioId: id },
         create: {
-          funcionarioId: id, email, senha: hash,
+          funcionarioId: id, email, senha: hash, primeiroAcesso: true,
           permissoes: dto.permissoes, ativo: true,
         },
         update: {
-          email, senha: hash, permissoes: dto.permissoes, ativo: true,
+          email, senha: hash, primeiroAcesso: true, sessaoId: null,
+          permissoes: dto.permissoes, ativo: true,
         },
         select: { id: true, email: true, ativo: true, permissoes: true },
       });
