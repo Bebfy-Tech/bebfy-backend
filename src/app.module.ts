@@ -22,6 +22,7 @@ import { CategoriasModule } from './produtos/categorias/categorias.module';
 import { LotesModule } from './produtos/lotes/lotes.module';
 import { FornecedoresModule } from './produtos/fornecedores/fornecedores.module';
 import { MovimentacoesEstoqueModule } from './produtos/movimentacoes-estoque/movimentacoes-estoque.module';
+import { VasilhamesModule } from './produtos/vasilhames/vasilhames.module';
 
 // Relatórios
 import { RelatoriosModule } from './relatorios/relatorios.module';
@@ -59,6 +60,7 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
     LotesModule,
     FornecedoresModule,
     MovimentacoesEstoqueModule,
+    VasilhamesModule,
 
     // Relatórios
     RelatoriosModule,
