@@ -77,6 +77,9 @@ model Empresa {
   slug                 String                @unique
   subdominio           String?               @unique
   status               StatusEmpresa         @default(ATIVA)
+  inadimplente         Boolean               @default(false)
+  liberacaoFinanceiraAte DateTime?
+  historicoLiberacoes  SaasLiberacaoAcesso[]
   planoId              Int?
   plano                Plano?                @relation(fields: [planoId], references: [id])
   criadoEm             DateTime              @default(now())
@@ -100,6 +103,20 @@ model Empresa {
   logsAuditoria        LogAuditoria[]
 
   @@map("empresas")
+}
+
+model SaasLiberacaoAcesso {
+  id          String   @id @default(uuid())
+  empresaId   Int
+  empresa     Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  operadorId  String
+  dias        Int
+  motivo      String
+  liberadoAte DateTime
+  criadoEm    DateTime @default(now())
+
+  @@index([empresaId, criadoEm])
+  @@map("saas_liberacoes_acesso")
 }
 
 model Plano {
