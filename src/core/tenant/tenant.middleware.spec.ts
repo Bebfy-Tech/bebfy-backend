@@ -26,4 +26,17 @@ describe('TenantMiddleware: frontends e api central', () => {
     expect(req.empresa).toBeUndefined();
     expect(next).toHaveBeenCalledWith();
   });
+  it('rejeita x-tenant malformado antes de consultar o banco', async () => {
+    prisma.empresa.findFirst.mockClear();
+    const req: any = {
+      headers: { host: 'api.bebfy.com.br', 'x-tenant': '../outra-loja' },
+    };
+    const next = vi.fn();
+    await middleware.use(req, {} as any, next);
+    expect(prisma.empresa.findFirst).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({
+      response: expect.objectContaining({ statusCode: 400 }),
+    }));
+  });
+
 });
