@@ -19,9 +19,7 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - name: Install
-        run: npm install --legacy-peer-deps
-        # Diagnóstico temporário: lockfile está desatualizado e dependências têm conflitos.
-        # Substituir por npm ci após atualizar o lockfile.
+        run: npm ci
       - name: Build
         run: npm run build
       - name: Lint
