@@ -261,6 +261,8 @@ model Fornecedor {
   nomeFantasia String?
   telefone     String?
   email        String?
+  inscricaoEstadual String?
+  endereco     String?
   observacao   String?      // Campo de observação no rodapé
   criadoEm     DateTime     @default(now())
 
