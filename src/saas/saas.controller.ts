@@ -10,12 +10,13 @@ import {
 } from '@nestjs/common';
 import { SaasService } from './saas.service';
 import { JwtAuthGuard } from '../core/auth/jwt-auth.guard';
+import { SaasSuperAdminGuard } from './guards/saas-super-admin.guard';
 import { AlterarStatusEmpresaDto } from './dto/alterar-status-empresa.dto';
 import { AlternarModuloDto } from './dto/alternar-modulo.dto';
 import { AlterarPlanoDto } from './dto/alterar-plano.dto';
 import { CriarEmpresaDto } from './dto/criar-empresa.dto';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SaasSuperAdminGuard)
 @Controller('saas/admin')
 export class SaasController {
   constructor(private readonly saasService: SaasService) {}
