@@ -97,3 +97,36 @@ automaticamente todas as baixas históricas.
 - O frontend deve enviar `x-tenant` no login, configurando `VITE_TENANT_SLUG`; o serviço Axios e os contratos tipados estão na branch `refactor/conexao-backend-chatgpt` do repositório frontend.
 - Monitoramento, backups operacionais, configuração DNS/HTTPS, dados reais e deploy
   devem ser validados no ambiente final antes do lançamento.
+
+
+## Administração SaaS para o frontend
+
+A aplicação React na branch `refactor/conexao-backend-chatgpt` usa:
+
+- `POST /auth/login` com cabeçalho `x-tenant` e credenciais do usuário
+  autorizado como administrador global pelo servidor
+  (`SAAS_ADMIN_USER_IDS`).
+- `GET /saas/admin/empresas`: listagem de distribuidoras e contadores.
+- `POST /saas/admin/empresas`: cria distribuidora e proprietário.
+- `GET /saas/admin/empresas/:id`: visão detalhada.
+- `PATCH /saas/admin/empresas/:id/status`: situação da conta.
+- `GET /saas/admin/planos`, `POST /saas/admin/planos` e
+  `PATCH /saas/admin/planos/:id`: catálogo de planos e preços.
+- `PATCH /saas/admin/empresas/:id/plano`: associação de plano.
+- `PATCH /saas/admin/empresas/:id/modulos`: ativa/desativa módulo.
+
+O `ModuloAtivoGuard` impede o uso de rotas de `CAIXA_PDV`, `FIADOS`,
+`VASILHAMES_RETORNAVEIS`, `ESTOQUE_LOTES` e
+`COMPRAS_FORNECEDORES` quando o módulo está **explicitamente desativado**
+para a empresa. Ausência de registro mantém o comportamento legado
+(permitido) para não derrubar instalações existentes.
+
+Demais nomes no catálogo de `NomeModulo` representam funcionalidades
+planejadas e não significam que os respectivos módulos tenham rotas
+implementadas ou estejam prontos para comercialização. A configuração
+de módulo só deve ser oferecida como recurso funcional após seu
+endpoint ter proteção testada.
+
+A página inicial pública usa fotos externas e visualizações ilustrativas.
+O backend não serve arquivos de publicidade nem vídeos. Disponibilizar
+versões próprias otimizadas/CDN antes da publicação definitiva.
