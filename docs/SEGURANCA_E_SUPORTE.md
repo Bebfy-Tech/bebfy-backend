@@ -102,3 +102,24 @@ Os testes de suporte cobrem consentimento obrigatório, janela de expiração,
 revogação, usuário não autorizado, auditoria e resposta sem dados pessoais.
 A integração executa contra PostgreSQL 16 isolado no GitHub Actions.
 Isso não substitui um pentest nem a revisão de infraestrutura real.
+
+
+### Auditoria de hashes no banco selecionado
+
+Para verificar **somente o formato** dos hashes de senhas existentes
+sem revelar valores dos usuários:
+
+```bash
+DATABASE_URL='postgresql://...' npm run security:audit-passwords
+```
+
+O script informa total de usuários, quantos hashes bcrypt foram encontrados,
+quantos possuem fator de custo inferior a 12 e quantos valores não têm
+formato bcrypt válido. Sai com código 1 se encontrar senha armazenada em
+formato inseguro. Não imprime senhas, hashes ou CPF e não altera o banco.
+
+No pipeline de homologação PostgreSQL 16, a execução auditou uma conta
+de teste: **1 hash bcrypt válido, zero valores inseguros**. Isso não é
+evidência de que o banco real do cliente foi auditado. A execução no
+banco de produção, quando autorizada e com acesso controlado, é
+necessária para avaliar contas legadas.
