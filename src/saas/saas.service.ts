@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { PrismaService } from '../core/prisma/prisma.service';
 import { StatusEmpresa, NomeModulo } from '@prisma/client';
 import { CriarEmpresaDto } from './dto/criar-empresa.dto';
+import { CriarPlanoDto, AtualizarPlanoDto } from './dto/criar-plano.dto';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -132,6 +133,23 @@ export class SaasService {
         modulo,
         ativo,
       },
+    });
+  }
+
+  async criarPlano(dto: CriarPlanoDto) {
+    return this.prisma.plano.create({
+      data: { nome: dto.nome, tipo: dto.tipo, precoMensal: dto.precoMensal },
+    });
+  }
+
+  async atualizarPlano(id: number, dto: AtualizarPlanoDto) {
+    const existe = await this.prisma.plano.findUnique({ where: { id } });
+    if (!existe) throw new NotFoundException('Plano não encontrado.');
+    return this.prisma.plano.update({
+      where: { id },
+      data: { ...(dto.nome !== undefined ? { nome: dto.nome } : {}),
+        ...(dto.tipo !== undefined ? { tipo: dto.tipo } : {}),
+        ...(dto.precoMensal !== undefined ? { precoMensal: dto.precoMensal } : {}) },
     });
   }
 
