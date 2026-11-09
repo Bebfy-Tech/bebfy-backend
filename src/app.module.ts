@@ -26,6 +26,7 @@ import { VasilhamesModule } from './produtos/vasilhames/vasilhames.module';
 
 // Relatórios
 import { RelatoriosModule } from './relatorios/relatorios.module';
+import { FinanceiroModule } from './financeiro/financeiro.module';
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
 
     // Relatórios
     RelatoriosModule,
+    FinanceiroModule,
   ],
   providers: [
     {
