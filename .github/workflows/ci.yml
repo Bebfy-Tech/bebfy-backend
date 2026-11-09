@@ -30,3 +30,36 @@ jobs:
         env:
           JWT_SECRET: ci-test-only-not-a-production-secret-at-least-32-characters
         run: npm run test:e2e
+
+  database-migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bebfy_test
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: bebfy_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bebfy_test -d bebfy_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://bebfy_test:test-only-password@localhost:5432/bebfy_test?schema=public
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate Prisma schema
+        run: npx prisma validate
+      - name: Apply all migrations on clean PostgreSQL
+        run: npx prisma migrate deploy
