@@ -27,6 +27,10 @@ export class VendasService {
       throw new NotFoundException('Caixa informado não foi encontrado nesta empresa.');
     }
 
+    if (caixa.operadorId !== createVendaDto.funcionarioId) {
+      throw new BadRequestException('O caixa informado pertence a outro funcionário.');
+    }
+
     if (caixa.status !== StatusCaixa.ABERTO) {
       throw new BadRequestException('Não é possível realizar vendas em um caixa FECHADO.');
     }
