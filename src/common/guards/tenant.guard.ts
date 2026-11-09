@@ -11,7 +11,11 @@ export class TenantGuard implements CanActivate {
       throw new UnauthorizedException('Acesso negado: Contexto da empresa não identificado.');
     }
 
-    // Opcional: Se o usuário enviar um empresaId no body/query por engano, sobredetermina com o do JWT
+    if (request.empresa && request.empresa.id !== user.empresaId) {
+      throw new UnauthorizedException('O domínio ou cabeçalho da empresa não corresponde à sessão autenticada.');
+    }
+
+    // A identidade do tenant nas operações autenticadas vem sempre do JWT.
     request.empresaId = user.empresaId;
 
     return true;
