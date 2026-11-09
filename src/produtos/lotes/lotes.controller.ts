@@ -18,13 +18,15 @@ import {
 import { LotesService } from './lotes.service';
 import { CreateLoteDto } from './dto/create-lote.dto';
 import { ExigirPermissao, PermissoesGuard } from '../../common/guards/permissoes.guard';
+import { ExigirModulo, ModuloAtivoGuard } from '../../common/guards/modulo-ativo.guard';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 
 @ApiTags('Estoque & Catálogo')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard, TenantGuard, PermissoesGuard)
+@UseGuards(JwtAuthGuard, TenantGuard, PermissoesGuard, ModuloAtivoGuard)
+@ExigirModulo('ESTOQUE_LOTES')
 @Controller('lotes')
 export class LotesController {
   constructor(private readonly lotesService: LotesService) {}
