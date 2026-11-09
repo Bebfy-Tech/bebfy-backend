@@ -1,10 +1,10 @@
 # Empresa de homologação Bebfy
 
-**Nome:** `bebfytesBDteste`  
-**Subdomínio/slug:** `bebfytesbdteste`  
+**Nome:** `bebfyBDteste`  
+**Subdomínio/slug:** `bebfybdteste`  
 **Estado inicial:** `EM_TESTE`  
 **Plano inicial:** `Bebfy Teste` (`VAREJO_PRO`, preço apenas demonstrativo de R$ 99/mês)  
-**Código do primeiro operador proprietário:** `1`
+**Código do primeiro operador proprietário:** `1`\n**Primeiro acesso:** troca obrigatória da senha temporária
 
 O script de cadastro está em `scripts/create-test-company.ts`. Ele cria em **uma transação** a empresa, o plano, a configuração e o usuário proprietário, com senha armazenada em hash bcrypt (custo 12).
 
@@ -33,23 +33,23 @@ $env:BEBFY_TEST_PHONE = "<telefone de testes>"
 npm run dev:create-test-company
 ```
 
-No Linux/macOS, exporte as mesmas variáveis antes de executar `npm run dev:create-test-company`. O script **não registra** CPF, CNPJ, senha ou e-mail nos logs.
+Somente para testes isolados, é possível iniciar com `1/12345` definindo\n`BEBFY_TEST_OWNER_PASSWORD=12345` e `BEBFY_ALLOW_WEAK_DEMO_PASSWORD=true`,\ncom `NODE_ENV=development`. **Não use esta combinação em produção nem com dados reais.**\n\nNo Linux/macOS, exporte as mesmas variáveis antes de executar `npm run dev:create-test-company`. O script **não registra** CPF, CNPJ, senha ou e-mail nos logs.
 
-O script verifica se `bebfytesbdteste` já existe e não sobrescreve um cadastro anterior. Se o CNPJ, subdomínio ou e-mail já estiver vinculado a outra empresa, interrompe o cadastro.
+O script verifica se `bebfybdteste` já existe e não sobrescreve um cadastro anterior. Se o CNPJ, subdomínio ou e-mail já estiver vinculado a outra empresa, interrompe o cadastro.
 
 ## Acesso à loja
 
 Com o frontend e backend apontando para o mesmo ambiente de homologação:
 
-- No arquivo `.env.local` do **frontend**, use `VITE_TENANT_SLUG=bebfytesbdteste` e `VITE_API_URL` apontando ao NestJS.
-- Acesse `/login`, digite o **código 1** e a senha definida em `BEBFY_TEST_OWNER_PASSWORD`.
+- No arquivo `.env.local` do **frontend**, use `VITE_TENANT_SLUG=bebfybdteste` e `VITE_API_URL` apontando ao NestJS.
+- Acesse `/login`, digite o **código 1** e a senha definida em `BEBFY_TEST_OWNER_PASSWORD`. O sistema exigirá a troca para uma senha diferente (mínimo de 10 caracteres), antes de permitir o acesso.
 - Acesse `/dashboard` e `/pdv` para iniciar os testes. Não há produtos ou vendas de exemplo: eles devem ser cadastrados pelos fluxos normais ou por uma carga de dados específica.
 
 ## Acesso à gestão do SaaS
 
 O painel `/saas/acesso` já existe no código frontend. Para utilizá-lo, é necessário configurar a variável **servidor** `SAAS_ADMIN_USER_IDS` com o ID do registro `Usuario` do administrador autorizado. O script imprime o UUID do primeiro usuário criado, **mas não concede acesso global automaticamente**. Essa autorização precisa ser concedida conscientemente pelo administrador da infraestrutura.
 
-A tela SaaS utiliza o slug `bebfytesbdteste` para autenticar o usuário, seguido da verificação de administrador global. Para testar sem conceder acesso global ao proprietário da distribuidora, use uma conta de administrador da plataforma separada.
+A tela SaaS utiliza o slug `bebfybdteste` para autenticar o usuário, seguido da verificação de administrador global. Para testar sem conceder acesso global ao proprietário da distribuidora, use uma conta de administrador da plataforma separada.
 
 ## Estado do cadastro
 
