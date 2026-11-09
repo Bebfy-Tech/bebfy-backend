@@ -61,7 +61,7 @@ export class ImportacaoXmlService {
       this.prisma.notaFiscal.findUnique({where:{empresaId_chaveAcesso:{empresaId,chaveAcesso:nf.chave}},select:{id:true}}),
       this.prisma.produto.findMany({where:{empresaId,ativo:true},select:{id:true,nome:true,codigoBarras:true,estoqueAtual:true}}),
     ]);
-    if (empresa?.cnpj && nf.destinatarioCnpj && cnpj(empresa.cnpj)!==nf.destinatarioCnpj) throw new BadRequestException('O destinatário da NF-e não corresponde ao CNPJ desta distribuidora.');
+    if (empresa?.cnpj && cnpj(empresa.cnpj)!==nf.destinatarioCnpj) throw new BadRequestException('O destinatário da NF-e deve corresponder ao CNPJ desta distribuidora.');
     if (existente) throw new ConflictException('Esta NF-e já foi importada para esta distribuidora.');
     return {...nf,data:nf.data.toISOString(),fornecedorExistente:fornecedor,produtos,
       itens:nf.itens.map(item=>({...item,produtoSugeridoId:item.ean?produtos.find(p=>p.codigoBarras===item.ean)?.id??null:null}))};
