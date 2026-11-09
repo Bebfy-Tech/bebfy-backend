@@ -4,7 +4,8 @@
 **Subdomínio/slug:** `bebfybdteste`  
 **Estado inicial:** `EM_TESTE`  
 **Plano inicial:** `Bebfy Teste` (`VAREJO_PRO`, preço apenas demonstrativo de R$ 99/mês)  
-**Código do primeiro operador proprietário:** `1`\n**Primeiro acesso:** troca obrigatória da senha temporária
+**Código do primeiro operador proprietário:** `1`
+**Primeiro acesso:** troca obrigatória da senha temporária
 
 O script de cadastro está em `scripts/create-test-company.ts`. Ele cria em **uma transação** a empresa, o plano, a configuração e o usuário proprietário, com senha armazenada em hash bcrypt (custo 12).
 
@@ -33,7 +34,11 @@ $env:BEBFY_TEST_PHONE = "<telefone de testes>"
 npm run dev:create-test-company
 ```
 
-Somente para testes isolados, é possível iniciar com `1/12345` definindo\n`BEBFY_TEST_OWNER_PASSWORD=12345` e `BEBFY_ALLOW_WEAK_DEMO_PASSWORD=true`,\ncom `NODE_ENV=development`. **Não use esta combinação em produção nem com dados reais.**\n\nNo Linux/macOS, exporte as mesmas variáveis antes de executar `npm run dev:create-test-company`. O script **não registra** CPF, CNPJ, senha ou e-mail nos logs.
+Somente para testes isolados, é possível iniciar com `1/12345` definindo
+`BEBFY_TEST_OWNER_PASSWORD=12345` e `BEBFY_ALLOW_WEAK_DEMO_PASSWORD=true`,
+com `NODE_ENV=development`. **Não use esta combinação em produção nem com dados reais.**
+
+No Linux/macOS, exporte as mesmas variáveis antes de executar `npm run dev:create-test-company`. O script **não registra** CPF, CNPJ, senha ou e-mail nos logs.
 
 O script verifica se `bebfybdteste` já existe e não sobrescreve um cadastro anterior. Se o CNPJ, subdomínio ou e-mail já estiver vinculado a outra empresa, interrompe o cadastro.
 
