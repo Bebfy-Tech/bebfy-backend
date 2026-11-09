@@ -148,6 +148,8 @@ model Usuario {
   funcionarioId String      @unique
   funcionario   Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
   permissoes    String[]
+  primeiroAcesso Boolean @default(false)
+  sessaoId      String?
   criadoEm      DateTime    @default(now())
   atualizadoEm  DateTime    @updatedAt
 }
