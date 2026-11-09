@@ -34,7 +34,7 @@ export class AuthService {
       usuario: {
         id: usuario.id, codigo: usuario.funcionario.codigo,
         nome: usuario.funcionario.nome, cargo: usuario.funcionario.cargo,
-        funcionarioId: usuario.funcionarioId,
+        funcionarioId: usuario.funcionarioId, permissoes: usuario.permissoes,
       },
     };
   }
