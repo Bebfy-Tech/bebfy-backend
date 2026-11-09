@@ -64,6 +64,7 @@ export class SaasService {
             create: {
               email,
               senha: hash,
+              primeiroAcesso: true,
               permissoes: [],
               ativo: true,
             },
