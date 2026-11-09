@@ -46,13 +46,14 @@ export class MovimentacoesEstoqueService {
 
       const movimentacao = await tx.movimentacaoEstoque.create({
         data: {
+          empresaId,
           produtoId: createDto.produtoId,
           tipo: createDto.tipo,
           quantidade: createDto.quantidade,
           motivo: createDto.observacao
             ? `${createDto.motivo || ''} - Obs: ${createDto.observacao}`.trim()
             : createDto.motivo,
-        } as any,
+        },
       });
 
       const atualizacao = await tx.produto.updateMany({
