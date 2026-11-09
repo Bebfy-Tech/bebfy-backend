@@ -462,6 +462,7 @@ model ItemVenda {
   quantidade    Int
   precoUnitario Decimal
   precoTotal    Decimal
+  unidadesEstoque Int?      // Quantidade real de unidades abatidas (fardos inclusos)
   criadoEm      DateTime @default(now())
 }
 
