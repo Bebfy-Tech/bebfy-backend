@@ -8,7 +8,15 @@ import request from 'supertest';
 import * as bcrypt from 'bcrypt';
 // Load the compiled NestJS application so TypeScript decorator metadata is preserved.
 // Vitest/esbuild does not emit design:paramtypes required by Nest dependency injection.
-const { AppModule } = require('../../dist/app.module.js');
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+const compiledCandidates = [
+  resolve(process.cwd(), 'dist/src/app.module.js'),
+  resolve(process.cwd(), 'dist/app.module.js'),
+];
+const compiledApp = compiledCandidates.find(path => existsSync(path));
+if (!compiledApp) throw new Error('NestJS compilado não encontrado. Execute npm run build antes do teste HTTP.');
+const { AppModule } = require(compiledApp);
 
 describe('HTTP contracts: React frontend / backend multi-tenant', () => {
   const prisma = new PrismaClient();
