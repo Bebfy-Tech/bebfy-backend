@@ -6,7 +6,9 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import * as bcrypt from 'bcrypt';
-import { AppModule } from '../../src/app.module';
+// Load the compiled NestJS application so TypeScript decorator metadata is preserved.
+// Vitest/esbuild does not emit design:paramtypes required by Nest dependency injection.
+const { AppModule } = require('../../dist/app.module.js');
 
 describe('HTTP contracts: React frontend / backend multi-tenant', () => {
   const prisma = new PrismaClient();
