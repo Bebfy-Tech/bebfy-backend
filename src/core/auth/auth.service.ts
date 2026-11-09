@@ -13,6 +13,9 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto, empresaId?: number) {
+    if (!empresaId) {
+      throw new UnauthorizedException('Identifique a empresa antes de efetuar login.');
+    }
     const codigoNumero = Number(dto.login);
     const isNumero = !isNaN(codigoNumero);
 
@@ -21,6 +24,7 @@ export class AuthService {
         ativo: true,
         funcionario: {
           ativo: true,
+          empresaId,
           OR: [
             ...(isNumero ? [{ codigo: codigoNumero }] : []),
             { cpf: dto.login },
@@ -40,7 +44,7 @@ export class AuthService {
       throw new UnauthorizedException('Código do funcionário ou senha incorretos.');
     }
 
-    if (empresaId && usuario.funcionario.empresaId !== empresaId) {
+    if (usuario.funcionario.empresaId !== empresaId) {
       throw new UnauthorizedException('Usuário não possui acesso a esta empresa.');
     }
 
@@ -50,6 +54,9 @@ export class AuthService {
     }
 
     const empresa = usuario.funcionario.empresa;
+    if (empresa.status !== 'ATIVA') {
+      throw new UnauthorizedException('Empresa inativa.');
+    }
 
     const payload = {
       sub: usuario.id,
