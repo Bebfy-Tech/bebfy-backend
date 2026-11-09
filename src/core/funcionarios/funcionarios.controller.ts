@@ -21,9 +21,25 @@ export class FuncionariosController {
     }
   }
 
+  private validarCargoSolicitado(req: any, cargo?: string): void {
+    if (!cargo) return;
+    if (cargo === 'PROPRIETARIO' && req.user?.cargo !== 'PROPRIETARIO') {
+      throw new ForbiddenException('Somente proprietários podem atribuir cargo de proprietário.');
+    }
+    if (cargo === 'ADMINISTRADOR' && req.user?.cargo === 'GERENTE') {
+      throw new ForbiddenException('Gerentes não podem atribuir cargo de administrador.');
+    }
+  }
+
+  private async validarAlvo(req: any, empresaId: number, id: string): Promise<void> {
+    const funcionario = await this.funcionariosService.findOne(id, empresaId);
+    this.validarCargoSolicitado(req, funcionario.cargo);
+  }
+
   @Post()
   create(@CurrentTenant() empresaId: number, @Req() req: any, @Body() dto: CreateFuncionarioDto) {
     this.exigirGestor(req);
+    this.validarCargoSolicitado(req, dto.cargo);
     return this.funcionariosService.create(dto, empresaId);
   }
 
@@ -33,8 +49,9 @@ export class FuncionariosController {
   }
 
   @Post(':id/acesso')
-  configurarAcesso(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string, @Body() dto: ConfigurarAcessoDto) {
+  async configurarAcesso(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string, @Body() dto: ConfigurarAcessoDto) {
     this.exigirGestor(req);
+    await this.validarAlvo(req, empresaId, id);
     return this.funcionariosService.configurarAcesso(id, empresaId, dto);
   }
 
@@ -44,14 +61,17 @@ export class FuncionariosController {
   }
 
   @Patch(':id')
-  update(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string, @Body() dto: UpdateFuncionarioDto) {
+  async update(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string, @Body() dto: UpdateFuncionarioDto) {
     this.exigirGestor(req);
+    await this.validarAlvo(req, empresaId, id);
+    this.validarCargoSolicitado(req, dto.cargo);
     return this.funcionariosService.update(id, dto, empresaId);
   }
 
   @Delete(':id')
-  remove(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string) {
+  async remove(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string) {
     this.exigirGestor(req);
+    await this.validarAlvo(req, empresaId, id);
     return this.funcionariosService.remove(id, empresaId);
   }
 }
