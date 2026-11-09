@@ -27,7 +27,7 @@ export class SuporteService {
           usuarioId: administradorId,
           acao: 'SUPORTE_SESSAO_INICIADA',
           entidade: 'SessaoSuporte', entidadeId: criada.id,
-          detalhes: JSON.stringify({ ticket: criada.ticket, expiraEm: criada.expiraEm.toISOString() }),
+          detalhes: JSON.stringify({ ticket: criada.ticket, consentimentoConfirmado: dto.consentimentoConfirmado, expiraEm: criada.expiraEm.toISOString() }),
           ip: ip || null,
         },
       });
