@@ -23,7 +23,8 @@
     "security:audit-passwords": "ts-node scripts/audit-credentials.ts",
     "dev:create-test-company": "ts-node scripts/create-test-company.ts",
     "postinstall": "prisma generate",
-    "dev:provision-saas-admins": "ts-node scripts/provision-saas-admins.ts"
+    "dev:provision-saas-admins": "ts-node scripts/provision-saas-admins.ts",
+    "setup:saas-admins": "prisma migrate deploy && prisma generate && ts-node scripts/provision-saas-admins.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
