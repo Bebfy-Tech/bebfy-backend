@@ -28,7 +28,6 @@ import { VasilhamesModule } from './produtos/vasilhames/vasilhames.module';
 import { RelatoriosModule } from './relatorios/relatorios.module';
 import { FinanceiroModule } from './financeiro/financeiro.module';
 import { SaasModule } from './saas/saas.module';
-import { NotasFiscaisModule } from './notas-fiscais/notas-fiscais.module';
 
 @Module({
   imports: [
@@ -69,7 +68,6 @@ import { NotasFiscaisModule } from './notas-fiscais/notas-fiscais.module';
     RelatoriosModule,
     FinanceiroModule,
     SaasModule,
-    NotasFiscaisModule,
   ],
   providers: [
     {
