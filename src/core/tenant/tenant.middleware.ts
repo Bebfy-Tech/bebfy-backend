@@ -8,13 +8,19 @@ export class TenantMiddleware implements NestMiddleware {
 
   async use(req: Request, res: Response, next: NextFunction) {
     try {
-      const host = req.headers.host || '';
-      const parts = host.split('.');
-
-      const subdominio =
-        parts.length > 2 && !host.includes('localhost')
-          ? parts[0]
-          : (req.headers['x-tenant'] as string) || (req.headers['x-subdominio'] as string);
+      // API may run on api.bebfy.com.br while frontend runs on a different host.
+      // Prefer explicit x-tenant. Never interpret the generic API hostname as a store.
+      const host = (req.headers.host || '').split(':')[0].toLowerCase();
+      const requestedTenant = req.headers['x-tenant'] || req.headers['x-subdominio'];
+      const baseDomain = (process.env.TENANT_BASE_DOMAIN || '').toLowerCase().trim();
+      const suffix = baseDomain ? '.' + baseDomain : '';
+      const fromSubdomain = suffix && host.endsWith(suffix)
+        ? host.slice(0, -suffix.length)
+        : '';
+      const subdominio = typeof requestedTenant === 'string' && requestedTenant.trim()
+        ? requestedTenant.trim().toLowerCase()
+        : (fromSubdomain && !fromSubdomain.includes('.') && fromSubdomain !== 'api'
+          ? fromSubdomain : '');
 
       if (subdominio && this.prisma?.empresa) {
         const empresa = await this.prisma.empresa.findFirst({
