@@ -16,6 +16,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { VendasService } from './vendas.service';
+import { ComprovanteService } from './comprovante.service';
 import { CreateVendaDto } from './dto/create-venda.dto';
 import { ExigirPermissao, PermissoesGuard } from '../../common/guards/permissoes.guard';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
@@ -27,7 +28,7 @@ import { CurrentTenant } from '../../common/decorators/current-tenant.decorator'
 @UseGuards(JwtAuthGuard, TenantGuard, PermissoesGuard)
 @Controller('vendas')
 export class VendasController {
-  constructor(private readonly vendasService: VendasService) {}
+  constructor(private readonly vendasService: VendasService, private readonly comprovantes: ComprovanteService) {}
 
   @ApiOperation({
     summary: 'Registrar uma nova venda no PDV',
@@ -77,6 +78,12 @@ export class VendasController {
     @Body('vendaIds') vendaIds: string[],
   ) {
     return this.vendasService.confirmarAcertoDelivery(empresaId, vendaIds);
+  }
+
+  @ApiOperation({ summary: 'Comprovante comercial não fiscal para impressão' })
+  @Get(':id/comprovante')
+  obterComprovante(@CurrentTenant() empresaId: number, @Param('id') id: string) {
+    return this.comprovantes.obter(empresaId, id);
   }
 
   @ApiOperation({
