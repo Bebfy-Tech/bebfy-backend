@@ -40,8 +40,8 @@ import { SaasModule } from './saas/saas.module';
       },
       {
         name: 'strict',
-        ttl: 60000,  // 1 minuto
-        limit: 5,    // Máximo de 5 tentativas de login por IP por minuto
+        ttl: 60000,
+        limit: 100,  // Fallback global; endpoints sensíveis definem 5/10 com @Throttle.
       },
     ]),
 
