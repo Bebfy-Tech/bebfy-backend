@@ -18,13 +18,14 @@ import { CaixaService } from './caixa.service';
 import { AbrirCaixaDto } from './dto/abrir-caixa.dto';
 import { FecharCaixaDto } from './dto/fechar-caixa.dto';
 import { MovimentacaoCaixaDto } from './dto/movimentacao-caixa.dto';
+import { ExigirPermissao, PermissoesGuard } from '../../common/guards/permissoes.guard';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 
 @ApiTags('Caixa & Operações')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, TenantGuard, PermissoesGuard)
 @Controller('caixa')
 export class CaixaController {
   constructor(private readonly caixaService: CaixaService) {}
@@ -50,6 +51,7 @@ export class CaixaController {
   @ApiParam({ name: 'id', description: 'ID do caixa (UUID)' })
   @ApiResponse({ status: 201, description: 'Movimentação registrada com sucesso.' })
   @ApiResponse({ status: 404, description: 'Caixa não encontrado ou fechado.' })
+  @ExigirPermissao('CAIXA_MOVIMENTAR')
   @Post(':id/movimentacao')
   adicionarMovimentacao(
     @CurrentTenant() empresaId: number,
@@ -66,6 +68,7 @@ export class CaixaController {
   @ApiParam({ name: 'id', description: 'ID do caixa (UUID)' })
   @ApiResponse({ status: 200, description: 'Caixa fechado com sucesso.' })
   @ApiResponse({ status: 400, description: 'Caixa já se encontra fechado.' })
+  @ExigirPermissao('CAIXA_FECHAR')
   @Patch(':id/fechar')
   fecharCaixa(
     @CurrentTenant() empresaId: number,
