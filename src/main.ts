@@ -22,8 +22,27 @@ async function bootstrap() {
     allowedOrigins.push(process.env.FRONTEND_URL);
   }
 
+  // Multi-tenant storefronts run as loja.domain.com.br. Accept only the
+  // explicitly configured base domain and its single-label HTTPS subdomains.
+  // Do not use a wildcard '*' with credentials: it permits hostile origins.
+  const tenantDomain = (process.env.TENANT_BASE_DOMAIN || '').trim().toLowerCase();
   app.enableCors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      // Native/mobile clients and same-origin requests do not set Origin.
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      if (!tenantDomain) return callback(null, false);
+      try {
+        const parsed = new URL(origin);
+        const subdomain = parsed.hostname.toLowerCase().endsWith('.' + tenantDomain)
+          ? parsed.hostname.toLowerCase().slice(0, -(tenantDomain.length + 1))
+          : '';
+        const validSubdomain = /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(subdomain)
+          && !['api', 'www', 'app'].includes(subdomain);
+        return callback(null, parsed.protocol === 'https:' && validSubdomain);
+      } catch {
+        return callback(null, false);
+      }
+    },
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Accept, Authorization, x-tenant, x-subdominio, x-empresa-id',
