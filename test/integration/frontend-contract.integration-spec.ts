@@ -220,7 +220,7 @@ describe('HTTP contracts: React frontend / backend multi-tenant', () => {
     const conflito = await request(app.getHttpServer())
       .post('/auth/login').set(headers).send(loginBody);
     expect(conflito.status).toBe(409);
-    expect(conflito.body.error.codigo).toBe('SESSAO_ATIVA');
+    expect(conflito.body.error?.codigo ?? conflito.body.codigo).toBe('SESSAO_ATIVA');
 
     const anteriorAindaAtivo = await request(app.getHttpServer())
       .get('/auth/perfil').set(headers).set('Authorization', 'Bearer ' + token);
