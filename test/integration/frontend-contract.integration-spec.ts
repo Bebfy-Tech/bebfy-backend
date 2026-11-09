@@ -53,7 +53,7 @@ describe('HTTP contracts: React frontend / backend multi-tenant', () => {
     await prisma.usuario.create({
       data: {
         email: marcador + '@teste.bebfy.invalid', funcionarioId,
-        senha: await bcrypt.hash('senha-contrato-segura', 10),
+        senha: await bcrypt.hash('senha-contrato-segura', 12),
         permissoes: [], ativo: true,
       },
     });
