@@ -17,13 +17,14 @@ import {
 } from '@nestjs/swagger';
 import { VendasService } from './vendas.service';
 import { CreateVendaDto } from './dto/create-venda.dto';
+import { ExigirPermissao, PermissoesGuard } from '../../common/guards/permissoes.guard';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 
 @ApiTags('Vendas & PDV')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, TenantGuard, PermissoesGuard)
 @Controller('vendas')
 export class VendasController {
   constructor(private readonly vendasService: VendasService) {}
@@ -68,6 +69,7 @@ export class VendasController {
     description: 'Atualiza o status de acerto de uma lista de vendas para CONCLUIDO.',
   })
   @ApiResponse({ status: 200, description: 'Acerto de delivery confirmado.' })
+  @ExigirPermissao('DELIVERY_ACERTAR')
   @Post('confirmar-acerto-delivery')
   @HttpCode(HttpStatus.OK)
   async confirmarAcertoDelivery(
@@ -100,6 +102,7 @@ export class VendasController {
   @ApiParam({ name: 'id', description: 'ID da venda a cancelar' })
   @ApiResponse({ status: 200, description: 'Venda cancelada e estornos efetuados.' })
   @ApiResponse({ status: 400, description: 'Venda já se encontra cancelada.' })
+  @ExigirPermissao('VENDAS_CANCELAR')
   @Post(':id/cancelar')
   @HttpCode(HttpStatus.OK)
   async cancelarVenda(
