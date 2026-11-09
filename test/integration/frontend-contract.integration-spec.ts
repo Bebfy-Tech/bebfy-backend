@@ -24,6 +24,7 @@ describe('HTTP contracts: React frontend / backend multi-tenant', () => {
   let slug: string;
   let outroSlug: string;
   let codigo: number;
+  let empresaId: number;
   let funcionarioId: string;
   let produtoId: number;
   let caixaId: string;
@@ -38,6 +39,7 @@ describe('HTTP contracts: React frontend / backend multi-tenant', () => {
     const loja = await prisma.empresa.create({
       data: { nomeFantasia: 'Bebfy Contrato', slug, subdominio: slug },
     });
+    empresaId = loja.id;
     await prisma.empresa.create({
       data: { nomeFantasia: 'Empresa Isolada', slug: outroSlug, subdominio: outroSlug },
     });
@@ -116,6 +118,23 @@ describe('HTTP contracts: React frontend / backend multi-tenant', () => {
       .get('/auth/perfil').set('x-tenant', outroSlug)
       .set('Authorization', 'Bearer ' + token);
     expect(response.status).toBe(401);
+  });
+
+  it('bloqueia a API do PDV quando o módulo é desativado no SaaS', async () => {
+    const headers = { 'x-tenant': slug, Authorization: 'Bearer ' + token };
+    await prisma.empresaModulo.upsert({
+      where: { empresaId_modulo: { empresaId, modulo: 'CAIXA_PDV' } },
+      create: { empresaId, modulo: 'CAIXA_PDV', ativo: false },
+      update: { ativo: false },
+    });
+    const bloqueada = await request(app.getHttpServer()).get('/vendas').set(headers);
+    expect(bloqueada.status).toBe(403);
+    await prisma.empresaModulo.update({
+      where: { empresaId_modulo: { empresaId, modulo: 'CAIXA_PDV' } },
+      data: { ativo: true },
+    });
+    const habilitada = await request(app.getHttpServer()).get('/vendas').set(headers);
+    expect(habilitada.status).toBe(200);
   });
 
   it('registra a venda, retorna comprovante não fiscal e não expõe endpoint de NF-e', async () => {
