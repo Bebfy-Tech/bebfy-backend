@@ -30,7 +30,6 @@
     "@nestjs/core": "^10.4.0",
     "@nestjs/jwt": "^10.2.0",
     "@nestjs/mapped-types": "*",
-    "@nestjs/observe": "^0.3.0",
     "@nestjs/passport": "^10.0.3",
     "@nestjs/platform-express": "^10.4.0",
     "@nestjs/swagger": "^7.4.0",
@@ -48,7 +47,6 @@
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.5",
-    "@nestjs/mau": "^0.2.6",
     "@nestjs/schematics": "^10.1.3",
     "@nestjs/testing": "^10.4.0",
     "@prisma/client": "5.22.0",
