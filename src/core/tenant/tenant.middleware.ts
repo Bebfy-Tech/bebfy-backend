@@ -23,7 +23,7 @@ export class TenantMiddleware implements NestMiddleware {
           },
         });
 
-        if (!empresa || empresa.status !== 'ATIVA') {
+        if (!empresa || !['ATIVA', 'EM_TESTE'].includes(empresa.status)) {
           throw new NotFoundException(
             `Empresa do subdomínio "${subdominio}" não foi localizada ou encontra-se inativa.`,
           );
