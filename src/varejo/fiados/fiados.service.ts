@@ -77,7 +77,10 @@ export class FiadosService {
       }
 
       const valorNum = Number(dto.valor);
-      const novoSaldo = Math.max(0, Number(cliente.saldoDevedor) - valorNum);
+      if (valorNum > Number(cliente.saldoDevedor)) {
+        throw new BadRequestException('Pagamento superior ao saldo devedor do cliente.');
+      }
+      const novoSaldo = Number(cliente.saldoDevedor) - valorNum;
 
       await tx.cliente.update({
         where: { id: clienteId },
@@ -99,7 +102,10 @@ export class FiadosService {
           where: { id: dto.caixaId, empresaId, status: 'ABERTO' },
         });
 
-        if (caixa) {
+        if (!caixa) {
+          throw new BadRequestException('Caixa informado não está aberto nesta empresa.');
+        }
+        if (dto.formaPagamento === 'DINHEIRO') {
           await tx.movimentacaoCaixa.create({
             data: {
               caixaId: dto.caixaId,
