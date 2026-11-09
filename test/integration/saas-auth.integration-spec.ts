@@ -21,6 +21,7 @@ describe('SaaS: administradores independentes das distribuidoras', () => {
   let app: INestApplication;
   let adminId = '';
   let collaboratorId = '';
+  let sampleCompanyId = 0;
   const code = 90000000 + Math.floor(Math.random() * 8000000);
   const password = 'senha-qa-forte-' + randomUUID();
   beforeAll(async () => {
@@ -37,6 +38,7 @@ describe('SaaS: administradores independentes das distribuidoras', () => {
   }, 60000);
   afterAll(async () => {
     if (app) await app.close();
+    if (sampleCompanyId) await db.empresa.deleteMany({where:{id:sampleCompanyId}});
     if (collaboratorId) await db.saasOperador.deleteMany({where:{id:collaboratorId}});
     if (adminId) await db.saasOperador.deleteMany({where:{id:adminId}});
     await db.$disconnect();
@@ -68,4 +70,52 @@ describe('SaaS: administradores independentes das distribuidoras', () => {
     expect(disabled.status).toBe(200);
     expect((await request(server).get('/saas/admin/empresas').set(employeeBearer)).status).toBe(401);
   });
+  it('bloqueia inadimplência, libera prazo e preserva suspensão manual', async () => {
+    const server = app.getHttpServer();
+    const slug = 'saas-grace-' + randomUUID().slice(0, 8);
+    const company = await db.empresa.create({
+      data: { nomeFantasia: 'Grace QA', slug, subdominio: slug, status: 'ATIVA' },
+    });
+    sampleCompanyId = company.id;
+    const auth = await request(server).post('/saas/auth/login').send({ codigo: code, senha: password });
+    expect(auth.status).toBe(200);
+    const token = { Authorization: 'Bearer ' + auth.body.access_token };
+
+    const changed = await request(server).patch('/saas/admin/empresas/' + company.id + '/inadimplencia')
+      .set(token).send({ inadimplente: true });
+    expect(changed.status).toBe(200);
+    expect(changed.body.inadimplente).toBe(true);
+    expect((await request(server).post('/auth/login').set('x-tenant', slug)
+      .send({ login: '1', senha: 'senha-invalida' })).status).toBe(404);
+
+    const invalid = await request(server).post('/saas/admin/empresas/' + company.id + '/liberar-acesso')
+      .set(token).send({ dias: 0, motivo: 'Sem justificativa' });
+    expect(invalid.status).toBe(400);
+
+    const release = await request(server).post('/saas/admin/empresas/' + company.id + '/liberar-acesso')
+      .set(token).send({ dias: 7, motivo: 'Prazo concedido pela equipe de suporte.' });
+    expect(release.status).toBe(201);
+    expect(release.body.inadimplente).toBe(true);
+    expect(new Date(release.body.liberacaoFinanceiraAte).getTime()).toBeGreaterThan(Date.now());
+
+    const history = await request(server).get('/saas/admin/empresas/' + company.id).set(token);
+    expect(history.status).toBe(200);
+    expect(history.body.historicoLiberacoes.length).toBe(1);
+    expect(history.body.historicoLiberacoes[0].operadorId).toBe(adminId);
+    expect((await request(server).post('/auth/login').set('x-tenant', slug)
+      .send({ login: '1', senha: 'senha-invalida' })).status).toBe(401);
+
+    await db.empresa.update({
+      where: { id: company.id }, data: { liberacaoFinanceiraAte: new Date(Date.now() - 60_000) },
+    });
+    expect((await request(server).post('/auth/login').set('x-tenant', slug)
+      .send({ login: '1', senha: 'senha-invalida' })).status).toBe(404);
+
+    await request(server).patch('/saas/admin/empresas/' + company.id + '/status')
+      .set(token).send({ status: 'SUSPENSA' });
+    const blockedGrace = await request(server).post('/saas/admin/empresas/' + company.id + '/liberar-acesso')
+      .set(token).send({ dias: 7, motivo: 'Não permitir suspensão manual.' });
+    expect(blockedGrace.status).toBe(400);
+  });
+
 });
