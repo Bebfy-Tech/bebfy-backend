@@ -9,7 +9,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'segredo_super_secreto',
+      secretOrKey: process.env.JWT_SECRET as string,
     });
   }
 
@@ -18,12 +18,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       where: { id: payload.sub },
       select: {
         id: true,
+        ativo: true,
         email: true,
         permissoes: true,
         funcionarioId: true,
         funcionario: {
           select: {
             id: true,
+            ativo: true,
             nome: true,
             cargo: true,
             empresaId: true,
@@ -41,11 +43,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       },
     });
 
-    if (!usuario || !usuario.funcionario) {
+    if (!usuario || !usuario.ativo || !usuario.funcionario || !usuario.funcionario.ativo) {
       throw new UnauthorizedException('Utilizador não encontrado ou sem vínculo de funcionário.');
     }
 
-    if (usuario.funcionario.empresa.status !== 'ATIVA') {
+    if (payload.empresaId !== usuario.funcionario.empresaId || usuario.funcionario.empresa.status !== 'ATIVA') {
       throw new UnauthorizedException('A empresa vinculada a este utilizador encontra-se inativa.');
     }
 
