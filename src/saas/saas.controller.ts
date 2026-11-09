@@ -15,6 +15,7 @@ import { AlterarStatusEmpresaDto } from './dto/alterar-status-empresa.dto';
 import { AlternarModuloDto } from './dto/alternar-modulo.dto';
 import { AlterarPlanoDto } from './dto/alterar-plano.dto';
 import { CriarEmpresaDto } from './dto/criar-empresa.dto';
+import { CriarPlanoDto, AtualizarPlanoDto } from './dto/criar-plano.dto';
 
 @UseGuards(JwtAuthGuard, SaasSuperAdminGuard)
 @Controller('saas/admin')
@@ -51,6 +52,16 @@ export class SaasController {
     @Body() dto: AlternarModuloDto,
   ) {
     return this.saasService.alternarModuloEmpresa(id, dto.modulo, dto.ativo);
+  }
+
+  @Post('planos')
+  criarPlano(@Body() dto: CriarPlanoDto) {
+    return this.saasService.criarPlano(dto);
+  }
+
+  @Patch('planos/:id')
+  atualizarPlano(@Param('id', ParseIntPipe) id: number, @Body() dto: AtualizarPlanoDto) {
+    return this.saasService.atualizarPlano(id, dto);
   }
 
   @Get('planos')
