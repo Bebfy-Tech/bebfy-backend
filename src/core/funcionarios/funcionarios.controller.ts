@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { FuncionariosService } from './funcionarios.service';
 import { CreateFuncionarioDto } from './dto/create-funcionario.dto';
 import { UpdateFuncionarioDto } from './dto/update-funcionario.dto';
+import { ConfigurarAcessoDto } from './dto/configurar-acesso.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
@@ -29,6 +30,12 @@ export class FuncionariosController {
   @Get()
   findAll(@CurrentTenant() empresaId: number) {
     return this.funcionariosService.findAll(empresaId);
+  }
+
+  @Post(':id/acesso')
+  configurarAcesso(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string, @Body() dto: ConfigurarAcessoDto) {
+    this.exigirGestor(req);
+    return this.funcionariosService.configurarAcesso(id, empresaId, dto);
   }
 
   @Get(':id')
