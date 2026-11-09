@@ -7,7 +7,7 @@ import { PrismaService } from '../../core/prisma/prisma.service';
 import { AbrirCaixaDto } from './dto/abrir-caixa.dto';
 import { FecharCaixaDto } from './dto/fechar-caixa.dto';
 import { MovimentacaoCaixaDto } from './dto/movimentacao-caixa.dto';
-import { StatusCaixa, TipoMovimentacaoCaixa } from '@prisma/client';
+import { StatusCaixa, TipoMovimentacaoCaixa, FormaPagamento, StatusVenda } from '@prisma/client';
 
 @Injectable()
 export class CaixaService {
@@ -121,8 +121,18 @@ export class CaixaService {
       .filter((m) => m.tipo === TipoMovimentacaoCaixa.SANGRIA)
       .reduce((acc, m) => acc + Number(m.valor), 0);
 
+    const vendas = await this.prisma.venda.findMany({
+      where: { caixaId, empresaId, status: StatusVenda.CONCLUIDA },
+      include: { pagamentos: true },
+    });
+    const dinheiroVendas = vendas.reduce(
+      (total, venda) => total + venda.pagamentos
+        .filter(p => p.formaPagamento === FormaPagamento.DINHEIRO)
+        .reduce((sum, p) => sum + Number(p.valor) - Number(p.troco), 0),
+      0,
+    );
     const saldoInicial = Number(caixa.saldoInicial);
-    const saldoFinalSistema = saldoInicial + totalSuprimentos - totalSangrias;
+    const saldoFinalSistema = saldoInicial + totalSuprimentos - totalSangrias + dinheiroVendas;
 
     const saldoFisico = Number(fecharCaixaDto.saldoFinalFisico);
     const quebraDeCaixa = saldoFisico - saldoFinalSistema;
