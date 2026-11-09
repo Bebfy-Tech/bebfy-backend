@@ -24,9 +24,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       status = exception.getStatus();
       const res = exception.getResponse();
       message = typeof res === 'object' ? res : { message: res };
-    } else if (exception instanceof Error) {
-      message = exception.message;
     }
+    // Do not disclose database details, stack traces or internal exception messages to clients.
 
     const errorBody = {
       statusCode: status,
