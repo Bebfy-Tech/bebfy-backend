@@ -48,6 +48,27 @@ enum NomeModulo {
   RELATORIOS_AVANCADOS
 }
 
+
+enum SaasCargo {
+  SUPER_ADMIN
+  OPERADOR
+}
+
+model SaasOperador {
+  id          String    @id @default(uuid())
+  codigo      Int       @unique
+  nome        String
+  senha       String
+  cargo       SaasCargo @default(OPERADOR)
+  permissoes  String[]  @default([])
+  ativo       Boolean   @default(true)
+  sessaoId    String?
+  criadoEm    DateTime  @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@map("saas_operadores")
+}
+
 model Empresa {
   id                   Int                   @id @default(autoincrement())
   nomeFantasia         String
