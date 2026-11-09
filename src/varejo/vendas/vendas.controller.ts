@@ -19,13 +19,15 @@ import { VendasService } from './vendas.service';
 import { ComprovanteService } from './comprovante.service';
 import { CreateVendaDto } from './dto/create-venda.dto';
 import { ExigirPermissao, PermissoesGuard } from '../../common/guards/permissoes.guard';
+import { ExigirModulo, ModuloAtivoGuard } from '../../common/guards/modulo-ativo.guard';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 
 @ApiTags('Vendas & PDV')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard, TenantGuard, PermissoesGuard)
+@UseGuards(JwtAuthGuard, TenantGuard, PermissoesGuard, ModuloAtivoGuard)
+@ExigirModulo('CAIXA_PDV')
 @Controller('vendas')
 export class VendasController {
   constructor(private readonly vendasService: VendasService, private readonly comprovantes: ComprovanteService) {}
