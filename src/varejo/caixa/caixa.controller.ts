@@ -6,6 +6,8 @@ import {
   Patch,
   Param,
   UseGuards,
+  Req,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -42,7 +44,11 @@ export class CaixaController {
   abrirCaixa(
     @CurrentTenant() empresaId: number,
     @Body() abrirCaixaDto: AbrirCaixaDto,
+    @Req() req: any,
   ) {
+    if (abrirCaixaDto.operadorId !== req.user?.funcionarioId) {
+      throw new ForbiddenException('O caixa só pode ser aberto para o operador autenticado.');
+    }
     return this.caixaService.abrirCaixa(empresaId, abrirCaixaDto);
   }
 
