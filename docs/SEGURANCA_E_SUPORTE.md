@@ -1,4 +1,4 @@
-# Bebfy — Segurança de credenciais, documentos e suporte
+# Bebfy — Segurança de credenciais e documentos
 
 ## Estado confirmado da branch
 
@@ -17,38 +17,6 @@
 - CPF de funcionário, CPF/CNPJ de cliente e CNPJ da empresa **ainda são strings
   legíveis no banco**. O bcrypt não cobre esses campos. Também revisar
   telefones, endereços, logs e backups, que podem conter informações pessoais.
-
-## Fluxo atual de suporte seguro (somente diagnóstico)
-
-Rotas, acessíveis apenas com JWT de superadministrador SaaS:
-
-1. `POST /saas/admin/suporte/sessoes`
-   ```json
-   {
-     "empresaId": 1,
-     "motivo": "Cliente pediu apoio para diagnosticar o caixa",
-     "ticket": "SUP-123",
-     "consentimentoConfirmado": true
-   }
-   ```
-   Retorna identificador da sessão e expiração em **15 minutos**.
-2. `GET /saas/admin/suporte/sessoes/:id/diagnostico`:
-   somente situação da empresa e contagens agregadas de produtos,
-   funcionários, clientes, caixas abertos e vendas; sem senhas ou CPF.
-3. `POST /saas/admin/suporte/sessoes/:id/encerrar`: revoga acesso imediatamente.
-
-O administrador precisa estar autenticado, ter o ID autorizado no servidor,
-informar chamado/motivo e confirmar o consentimento do cliente (declaração
-auditável, não prova independente de consentimento). O backend valida
-administrador, sessão, expiração e revogação. Início, consulta e encerramento
-geram registros na tabela `logs_auditoria` com empresa, ator e ticket.
-
-**Não é impersonação de usuário.** Não permite criar vendas, alterar dados,
-ler CPF, baixar documentos nem acessar telas operacionais do cliente como
-se fosse ele. Para suporte interativo futuro, exigir autorização explícita
-do responsável pela empresa, escopo de permissões restrito, expiração,
-revogação, visibilidade do aviso na interface e logs por ação. Não
-usar senha master ou ignorar o JWT/tenant.
 
 ## Roteiro seguro de criptografia de CPF/CNPJ — ainda pendente
 
@@ -69,7 +37,7 @@ Migração planejada para homologação:
    simples para documentos, que têm espaço de busca pequeno.
 3. Implementar leitura dupla temporária e escrita criptografada,
    protegendo igualmente funcionário, cliente, empresa e ConfigGlobal,
-   sem expor documentos nos logs ou nos endpoints de suporte.
+   sem expor documentos em logs ou respostas não autorizadas.
 4. Fazer backfill em lotes, verificar contagens e unicidade,
    construir índices únicos por tenant, migrar filtros de login
    e pesquisa para o índice cego.
@@ -98,8 +66,7 @@ npm run test:e2e
 npm run test:integration
 ```
 
-Os testes de suporte cobrem consentimento obrigatório, janela de expiração,
-revogação, usuário não autorizado, auditoria e resposta sem dados pessoais.
+O fluxo de acesso temporário de suporte foi retirado a pedido do proprietário do projeto.
 A integração executa contra PostgreSQL 16 isolado no GitHub Actions.
 Isso não substitui um pentest nem a revisão de infraestrutura real.
 
