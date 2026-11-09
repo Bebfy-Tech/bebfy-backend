@@ -157,4 +157,101 @@ describe('HTTP contracts: React frontend / backend multi-tenant', () => {
     const fiscal = await request(app.getHttpServer()).get('/notas-fiscais').set(headers);
     expect(fiscal.status).toBe(404);
   });
+  it('exige troca de senha no primeiro acesso antes de permitir o painel', async () => {
+    const operador = await prisma.funcionario.create({
+      data: {
+        empresaId, nome: 'Administrador em primeiro acesso',
+        cpf: '77799911122', cargo: 'ADMINISTRADOR', codigo: 1,
+      },
+    });
+    await prisma.usuario.create({
+      data: {
+        email: 'primeiro-' + randomUUID() + '@bebfy.invalid',
+        funcionarioId: operador.id,
+        senha: await bcrypt.hash('senha-temporaria-123', 12),
+        permissoes: [], primeiroAcesso: true,
+      },
+    });
+    const credenciais = { login: '1', senha: 'senha-temporaria-123' };
+    const inicial = await request(app.getHttpServer())
+      .post('/auth/login').set('x-tenant', slug).send(credenciais);
+    expect(inicial.status).toBe(200);
+    expect(inicial.body.trocaSenhaObrigatoria).toBe(true);
+    expect(inicial.body.access_token).toBeUndefined();
+
+    const acessoProibido = await request(app.getHttpServer())
+      .get('/auth/perfil').set('x-tenant', slug)
+      .set('Authorization', 'Bearer ' + inicial.body.tokenTroca);
+    expect(acessoProibido.status).toBe(401);
+
+    const incorreta = await request(app.getHttpServer())
+      .post('/auth/primeiro-acesso/alterar-senha').set('x-tenant', slug)
+      .send({
+        tokenTroca: inicial.body.tokenTroca,
+        senhaAtual: credenciais.senha, novaSenha: 'senha-nova-muito-forte',
+        confirmarNovaSenha: 'nao-confere',
+      });
+    expect(incorreta.status).toBe(400);
+
+    const troca = await request(app.getHttpServer())
+      .post('/auth/primeiro-acesso/alterar-senha').set('x-tenant', slug)
+      .send({
+        tokenTroca: inicial.body.tokenTroca, senhaAtual: credenciais.senha,
+        novaSenha: 'senha-nova-muito-forte', confirmarNovaSenha: 'senha-nova-muito-forte',
+      });
+    expect(troca.status).toBe(200);
+    expect(typeof troca.body.access_token).toBe('string');
+
+    const reuse = await request(app.getHttpServer())
+      .post('/auth/primeiro-acesso/alterar-senha').set('x-tenant', slug)
+      .send({
+        tokenTroca: inicial.body.tokenTroca, senhaAtual: credenciais.senha,
+        novaSenha: 'outra-nova-senha-muito-forte', confirmarNovaSenha: 'outra-nova-senha-muito-forte',
+      });
+    expect(reuse.status).toBe(401);
+    const antiga = await request(app.getHttpServer())
+      .post('/auth/login').set('x-tenant', slug).send(credenciais);
+    expect(antiga.status).toBe(401);
+  });
+
+  it('exige confirmação para assumir sessão e revoga o token anterior', async () => {
+    const headers = { 'x-tenant': slug };
+    const loginBody = { login: String(codigo), senha: 'senha-contrato-segura' };
+    const conflito = await request(app.getHttpServer())
+      .post('/auth/login').set(headers).send(loginBody);
+    expect(conflito.status).toBe(409);
+    expect(conflito.body.error.codigo).toBe('SESSAO_ATIVA');
+
+    const anteriorAindaAtivo = await request(app.getHttpServer())
+      .get('/auth/perfil').set(headers).set('Authorization', 'Bearer ' + token);
+    expect(anteriorAindaAtivo.status).toBe(200);
+
+    const assumiu = await request(app.getHttpServer())
+      .post('/auth/login').set(headers).send({ ...loginBody, assumirSessao: true });
+    expect(assumiu.status).toBe(200);
+    expect(typeof assumiu.body.access_token).toBe('string');
+    expect(assumiu.body.access_token).not.toBe(token);
+
+    const tokenAntigo = await request(app.getHttpServer())
+      .get('/auth/perfil').set(headers).set('Authorization', 'Bearer ' + token);
+    expect(tokenAntigo.status).toBe(401);
+    const tokenNovo = await request(app.getHttpServer())
+      .get('/auth/perfil').set(headers)
+      .set('Authorization', 'Bearer ' + assumiu.body.access_token);
+    expect(tokenNovo.status).toBe(200);
+
+    const saida = await request(app.getHttpServer())
+      .post('/auth/logout').set(headers)
+      .set('Authorization', 'Bearer ' + assumiu.body.access_token);
+    expect(saida.status).toBe(200);
+    const encerrado = await request(app.getHttpServer())
+      .get('/auth/perfil').set(headers)
+      .set('Authorization', 'Bearer ' + assumiu.body.access_token);
+    expect(encerrado.status).toBe(401);
+
+    const novoLogin = await request(app.getHttpServer())
+      .post('/auth/login').set(headers).send(loginBody);
+    expect(novoLogin.status).toBe(200);
+  });
+
 });
