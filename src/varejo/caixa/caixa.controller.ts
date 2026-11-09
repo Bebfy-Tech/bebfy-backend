@@ -19,13 +19,15 @@ import { AbrirCaixaDto } from './dto/abrir-caixa.dto';
 import { FecharCaixaDto } from './dto/fechar-caixa.dto';
 import { MovimentacaoCaixaDto } from './dto/movimentacao-caixa.dto';
 import { ExigirPermissao, PermissoesGuard } from '../../common/guards/permissoes.guard';
+import { ExigirModulo, ModuloAtivoGuard } from '../../common/guards/modulo-ativo.guard';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 
 @ApiTags('Caixa & Operações')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard, TenantGuard, PermissoesGuard)
+@UseGuards(JwtAuthGuard, TenantGuard, PermissoesGuard, ModuloAtivoGuard)
+@ExigirModulo('CAIXA_PDV')
 @Controller('caixa')
 export class CaixaController {
   constructor(private readonly caixaService: CaixaService) {}
