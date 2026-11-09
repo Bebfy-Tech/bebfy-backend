@@ -186,16 +186,9 @@ describe('API operacional: contratos integrados e segurança por empresa', () =>
 
   it('bloqueia SaaS global para proprietário não autorizado e expõe áreas ao gestor', async () => {
     const server = app.getHttpServer();
-    const antigo = process.env.SAAS_ADMIN_USER_IDS;
-    delete process.env.SAAS_ADMIN_USER_IDS;
+    // Tokens de lojas jamais autenticam no painel central, mesmo com cargo de proprietário.
     const denied = await request(server).get('/saas/admin/empresas').set(headers());
-    expect(denied.status).toBe(403);
-    process.env.SAAS_ADMIN_USER_IDS = userId;
-    const allowed = await request(server).get('/saas/admin/empresas').set(headers());
-    if (antigo===undefined) delete process.env.SAAS_ADMIN_USER_IDS;
-    else process.env.SAAS_ADMIN_USER_IDS = antigo;
-    expect(allowed.status).toBe(200);
-    expect(allowed.body.some((e: { id: number }) => e.id === empresaId)).toBe(true);
+    expect(denied.status).toBe(401);
     for (const path of ['/funcionarios', '/vendas', '/caixa', '/fiados', '/relatorios/dashboard']) {
       const res = await request(server).get(path).set(headers());
       expect(res.status, path).toBe(200);
