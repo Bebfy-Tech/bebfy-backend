@@ -44,7 +44,8 @@ export class FuncionariosController {
   }
 
   @Get()
-  findAll(@CurrentTenant() empresaId: number) {
+  findAll(@CurrentTenant() empresaId: number, @Req() req: any) {
+    this.exigirGestor(req);
     return this.funcionariosService.findAll(empresaId);
   }
 
@@ -56,7 +57,8 @@ export class FuncionariosController {
   }
 
   @Get(':id')
-  findOne(@CurrentTenant() empresaId: number, @Param('id') id: string) {
+  findOne(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string) {
+    this.exigirGestor(req);
     return this.funcionariosService.findOne(id, empresaId);
   }
 
