@@ -22,6 +22,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         email: true,
         permissoes: true,
         sessaoId: true,
+        ultimaAtividadeEm: true,
         primeiroAcesso: true,
         funcionarioId: true,
         funcionario: {
@@ -53,6 +54,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     if (payload.empresaId !== usuario.funcionario.empresaId || !['ATIVA', 'EM_TESTE'].includes(usuario.funcionario.empresa.status)) {
       throw new UnauthorizedException('A empresa vinculada a este utilizador encontra-se inativa.');
+    }
+
+    if (!usuario.ultimaAtividadeEm ||
+        Date.now() - usuario.ultimaAtividadeEm.getTime() > 30000) {
+      await this.prisma.usuario.updateMany({
+        where: { id: usuario.id, sessaoId: payload.sessaoId },
+        data: { ultimaAtividadeEm: new Date() },
+      });
     }
 
     return {
