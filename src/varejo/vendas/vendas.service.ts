@@ -150,6 +150,7 @@ export class VendasService {
             vendaId: venda.id,
             produtoId: item.produtoId,
             quantidade: item.quantidade,
+            unidadesEstoque: unidadesParaAbater,
             precoUnitario: item.precoUnitario,
             precoTotal: item.quantidade * Number(item.precoUnitario),
           },
@@ -316,9 +317,7 @@ export class VendasService {
       for (const item of venda.itens) {
         const produto = await tx.produto.findUnique({ where: { id: item.produtoId } });
 
-        const unidades = (item as any)?.isFardo
-          ? item.quantidade * (produto?.fardoQuantidade || 1)
-          : item.quantidade;
+        const unidades = item.unidadesEstoque ?? item.quantidade;
 
         await tx.produto.update({
           where: { id: item.produtoId },
