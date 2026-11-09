@@ -33,6 +33,10 @@ async function bootstrap() {
       if (!tenantDomain) return callback(null, false);
       try {
         const parsed = new URL(origin);
+        // All storefronts and the SaaS console share the apex origin.
+        if (parsed.protocol === 'https:' && parsed.hostname.toLowerCase() === tenantDomain) {
+          return callback(null, true);
+        }
         const subdomain = parsed.hostname.toLowerCase().endsWith('.' + tenantDomain)
           ? parsed.hostname.toLowerCase().slice(0, -(tenantDomain.length + 1))
           : '';
