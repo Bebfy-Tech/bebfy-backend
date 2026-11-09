@@ -137,6 +137,60 @@ describe('HTTP contracts: React frontend / backend multi-tenant', () => {
     expect(habilitada.status).toBe(200);
   });
 
+  it('abre suporte auditado por 15 minutos somente com superadmin e consentimento', async () => {
+    const headers = { 'x-tenant': slug, Authorization: 'Bearer ' + token };
+    const dto = {
+      empresaId,
+      motivo: 'Apoio solicitado pela distribuidora para revisar status do caixa',
+      ticket: 'TICKET-TEST-0001',
+      consentimentoConfirmado: true,
+    };
+
+    const negado = await request(app.getHttpServer())
+      .post('/saas/admin/suporte/sessoes').set(headers).send(dto);
+    expect(negado.status).toBe(403);
+
+    const usuario = await prisma.usuario.findUniqueOrThrow({ where: { funcionarioId } });
+    const antigo = process.env.SAAS_ADMIN_USER_IDS;
+    process.env.SAAS_ADMIN_USER_IDS = usuario.id;
+    try {
+      const semConsentimento = await request(app.getHttpServer())
+        .post('/saas/admin/suporte/sessoes').set(headers)
+        .send({ ...dto, consentimentoConfirmado: false });
+      expect(semConsentimento.status).toBe(400);
+
+      const criada = await request(app.getHttpServer())
+        .post('/saas/admin/suporte/sessoes').set(headers).send(dto);
+      expect(criada.status).toBe(201);
+      expect(criada.body.modo).toBe('LEITURA_DIAGNOSTICO');
+      const id = criada.body.id as string;
+
+      const consulta = await request(app.getHttpServer())
+        .get('/saas/admin/suporte/sessoes/' + id + '/diagnostico').set(headers);
+      expect(consulta.status).toBe(200);
+      expect(consulta.body.somenteLeitura).toBe(true);
+      expect(consulta.body.dadosAgregados).toHaveProperty('produtos');
+      expect(JSON.stringify(consulta.body)).not.toContain('cpf');
+
+      const eventos = await prisma.logAuditoria.findMany({
+        where: { empresaId, entidadeId: id },
+        select: { acao: true },
+      });
+      expect(eventos.map(x => x.acao)).toContain('SUPORTE_SESSAO_INICIADA');
+      expect(eventos.map(x => x.acao)).toContain('SUPORTE_DIAGNOSTICO_CONSULTADO');
+
+      const encerrada = await request(app.getHttpServer())
+        .post('/saas/admin/suporte/sessoes/' + id + '/encerrar').set(headers);
+      expect(encerrada.status).toBe(201);
+      const aposEncerrar = await request(app.getHttpServer())
+        .get('/saas/admin/suporte/sessoes/' + id + '/diagnostico').set(headers);
+      expect(aposEncerrar.status).toBe(403);
+    } finally {
+      if (antigo === undefined) delete process.env.SAAS_ADMIN_USER_IDS;
+      else process.env.SAAS_ADMIN_USER_IDS = antigo;
+    }
+  });
+
   it('registra a venda, retorna comprovante não fiscal e não expõe endpoint de NF-e', async () => {
     const headers = { 'x-tenant': slug, Authorization: 'Bearer ' + token };
     const venda = await request(app.getHttpServer())
