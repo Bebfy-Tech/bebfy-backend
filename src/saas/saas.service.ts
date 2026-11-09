@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../core/prisma/prisma.service';
 import { StatusEmpresa, NomeModulo } from '@prisma/client';
 import { CriarEmpresaDto } from './dto/criar-empresa.dto';
@@ -108,6 +108,7 @@ export class SaasService {
         plano: true,
         modulosAtivos: true,
         config: true,
+        historicoLiberacoes: { orderBy: { criadoEm: 'desc' }, take: 20 },
         _count: {
           select: { funcionarios: true, produtos: true, vendas: true, clientes: true },
         },
@@ -119,6 +120,30 @@ export class SaasService {
     }
 
     return empresa;
+  }
+
+  async definirInadimplencia(id: number, inadimplente: boolean) {
+    await this.buscarEmpresaPorId(id);
+    return this.prisma.empresa.update({
+      where: { id },
+      data: { inadimplente, liberacaoFinanceiraAte: null },
+    });
+  }
+
+  async liberarTemporariamente(id: number, operadorId: string, dias: number, motivo: string) {
+    if (!Number.isInteger(dias) || dias < 1 || dias > 90) throw new BadRequestException('Escolha de 1 a 90 dias.');
+    if (!motivo?.trim() || motivo.trim().length < 8) throw new BadRequestException('Informe justificativa de no mínimo 8 caracteres.');
+    const empresa = await this.buscarEmpresaPorId(id);
+    if (!empresa.inadimplente) throw new BadRequestException('Essa empresa não está marcada como inadimplente.');
+    if (!['ATIVA', 'EM_TESTE'].includes(empresa.status)) throw new BadRequestException('Empresa suspensa ou cancelada não pode receber liberação financeira.');
+    const base = empresa.liberacaoFinanceiraAte && empresa.liberacaoFinanceiraAte.getTime() > Date.now() ? empresa.liberacaoFinanceiraAte.getTime() : Date.now();
+    const liberadoAte = new Date(base + dias * 24 * 60 * 60 * 1000);
+    return this.prisma.$transaction(async tx => {
+      await tx.saasLiberacaoAcesso.create({
+        data: { empresaId: id, operadorId, dias, motivo: motivo.trim(), liberadoAte },
+      });
+      return tx.empresa.update({ where: { id }, data: { liberacaoFinanceiraAte: liberadoAte } });
+    });
   }
 
   async alterarStatusEmpresa(id: number, status: StatusEmpresa) {
