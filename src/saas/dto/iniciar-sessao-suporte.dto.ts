@@ -1,4 +1,4 @@
-import { IsInt, IsNotEmpty, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import { Equals, IsBoolean, IsInt, IsNotEmpty, IsString, MaxLength, Min, MinLength } from 'class-validator';
 
 export class IniciarSessaoSuporteDto {
   @IsInt()
@@ -16,4 +16,8 @@ export class IniciarSessaoSuporteDto {
   @MinLength(3)
   @MaxLength(100)
   ticket: string;
+
+  @IsBoolean()
+  @Equals(true, { message: 'Confirme a autorização do cliente para esta sessão de suporte.' })
+  consentimentoConfirmado: boolean;
 }
