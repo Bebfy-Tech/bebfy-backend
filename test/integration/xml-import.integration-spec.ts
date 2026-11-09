@@ -1,6 +1,8 @@
 import 'reflect-metadata';
 import { describe, expect, it, vi } from 'vitest';
 import { BadRequestException, ConflictException } from '@nestjs/common';
+import { PrismaClient } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { ImportacaoXmlService } from '../../src/produtos/importacao-xml/importacao-xml.service';
 
 const xml = (quantity='6', cnpjDest='11222333000181') => `<?xml version="1.0" encoding="UTF-8"?>
@@ -55,4 +57,48 @@ describe('Importação de NF-e XML sem integração externa', () => {
   const {service}=fixture();
   await expect(service.confirmar(1,{xml:xml(),mapeamentos:[]})).rejects.toBeInstanceOf(BadRequestException);
  });
+ it('confirma a importação atomicamente no banco e cria a conta a pagar',async()=>{
+  const db=new PrismaClient();
+  await db.$connect();
+  let empresaId=0;
+  try {
+   const tenant='qa-xml-'+randomUUID().slice(0,9);
+   const empresa=await db.empresa.create({data:{
+    nomeFantasia:'Loja integração XML',slug:tenant,subdominio:tenant,cnpj:'11222333000181',
+   }});
+   empresaId=empresa.id;
+   const produto=await db.produto.create({data:{
+    empresaId,nome:'Cerveja 350ml',codigoBarras:'7891234567890',estoqueAtual:7,
+   }});
+   const service=new ImportacaoXmlService(db as any);
+   const result=await service.confirmar(empresaId,{
+    xml:xml(),mapeamentos:[{indice:0,produtoId:produto.id}],
+    gerarContaPagar:true,vencimento:'2026-12-10T12:00:00.000Z',
+   });
+   expect(result).toMatchObject({numeroNota:'1427',itensImportados:1,contaPagarCriada:true});
+   const saldo=await db.produto.findUnique({where:{id:produto.id}});
+   expect(saldo?.estoqueAtual).toBe(13);
+   const movimento=await db.movimentacaoEstoque.findFirst({where:{empresaId,produtoId:produto.id}});
+   expect(movimento?.quantidade).toBe(6);
+   const pagar=await db.contaPagar.findFirst({where:{empresaId,notaFiscalId:result.notaFiscalId}});
+   expect(Number(pagar?.valor)).toBe(27);
+   await expect(service.confirmar(empresaId,{
+    xml:xml(),mapeamentos:[{indice:0,produtoId:produto.id}],gerarContaPagar:false,
+   })).rejects.toBeInstanceOf(ConflictException);
+   expect((await db.produto.findUnique({where:{id:produto.id}}))?.estoqueAtual).toBe(13);
+  } finally {
+   if(empresaId){
+    const ids=(await db.notaFiscal.findMany({where:{empresaId},select:{id:true}})).map(n=>n.id);
+    await db.itemNotaFiscal.deleteMany({where:{notaFiscalId:{in:ids}}});
+    await db.contaPagar.deleteMany({where:{empresaId}});
+    await db.notaFiscal.deleteMany({where:{empresaId}});
+    await db.movimentacaoEstoque.deleteMany({where:{empresaId}});
+    await db.produto.deleteMany({where:{empresaId}});
+    await db.fornecedor.deleteMany({where:{empresaId}});
+    await db.empresa.deleteMany({where:{id:empresaId}});
+   }
+   await db.$disconnect();
+  }
+ },60000);
+
 });
