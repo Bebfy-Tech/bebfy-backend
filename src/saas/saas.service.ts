@@ -2,46 +2,75 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { PrismaService } from '../core/prisma/prisma.service';
 import { StatusEmpresa, NomeModulo } from '@prisma/client';
 import { CriarEmpresaDto } from './dto/criar-empresa.dto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class SaasService {
   constructor(private readonly prisma: PrismaService) {}
 
   async criarEmpresa(dto: CriarEmpresaDto) {
-    const empresaExistente = await this.prisma.empresa.findFirst({
-      where: {
-        OR: [
-          { cnpj: dto.documento },
-          { subdominio: dto.subdominio },
-        ],
-      },
-    });
-
-    if (empresaExistente) {
-      throw new ConflictException('Já existe uma empresa cadastrada com este CNPJ ou Subdomínio.');
+    const cnpj = dto.documento.replace(/\D/g, '');
+    const subdominio = dto.subdominio.trim().toLowerCase();
+    const email = dto.email.trim().toLowerCase();
+    if (!/^\d{14}$/.test(cnpj)) {
+      throw new ConflictException('CNPJ precisa conter 14 dígitos.');
     }
-
-    const plano = await this.prisma.plano.findUnique({
-      where: { id: dto.planoId },
-    });
-
-    if (!plano) {
-      throw new NotFoundException(`Plano com ID ${dto.planoId} não encontrado.`);
+    const [existente, usuarioExistente, plano] = await Promise.all([
+      this.prisma.empresa.findFirst({
+        where: { OR: [{ cnpj }, { subdominio }, { slug: subdominio }] },
+      }),
+      this.prisma.usuario.findUnique({ where: { email } }),
+      this.prisma.plano.findUnique({ where: { id: dto.planoId } }),
+    ]);
+    if (existente) {
+      throw new ConflictException('Empresa já existente com este CNPJ ou subdomínio.');
     }
+    if (usuarioExistente) {
+      throw new ConflictException('E-mail do responsável já cadastrado.');
+    }
+    if (!plano) throw new NotFoundException('Plano de assinatura não encontrado.');
 
-    return this.prisma.empresa.create({
-      data: {
-        nomeFantasia: dto.nome,
-        razaoSocial: dto.nome,
-        cnpj: dto.documento,
-        subdominio: dto.subdominio,
-        slug: dto.subdominio || dto.nome.toLowerCase().replace(/[^a-z0-9]/g, '-'),
-        planoId: dto.planoId,
-        status: StatusEmpresa.EM_TESTE,
-      },
-      include: {
-        plano: true,
-      },
+    const hash = await bcrypt.hash(dto.senhaInicial, 12);
+    return this.prisma.$transaction(async tx => {
+      const empresa = await tx.empresa.create({
+        data: {
+          nomeFantasia: dto.nome,
+          razaoSocial: dto.nome,
+          cnpj,
+          subdominio,
+          slug: subdominio,
+          planoId: dto.planoId,
+          status: StatusEmpresa.EM_TESTE,
+        },
+      });
+      await tx.configGlobal.create({
+        data: {
+          empresaId: empresa.id,
+          nomeEmpresa: dto.nome,
+          cnpj,
+          telefone: dto.telefone,
+        },
+      });
+      const responsavel = await tx.funcionario.create({
+        data: {
+          empresaId: empresa.id,
+          nome: dto.nomeResponsavel,
+          cpf: dto.cpfResponsavel,
+          telefone: dto.telefone,
+          cargo: 'PROPRIETARIO',
+          codigo: 1,
+          usuario: {
+            create: {
+              email,
+              senha: hash,
+              permissoes: [],
+              ativo: true,
+            },
+          },
+        },
+        select: { id: true, nome: true, cargo: true, codigo: true },
+      });
+      return { empresa, responsavel };
     });
   }
 
