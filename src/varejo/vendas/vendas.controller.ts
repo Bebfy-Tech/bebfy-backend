@@ -7,6 +7,8 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Req,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -43,7 +45,11 @@ export class VendasController {
   async create(
     @CurrentTenant() empresaId: number,
     @Body() createVendaDto: CreateVendaDto,
+    @Req() req: any,
   ) {
+    if (createVendaDto.funcionarioId !== req.user?.funcionarioId) {
+      throw new ForbiddenException('A venda deve pertencer ao operador autenticado.');
+    }
     return this.vendasService.create(empresaId, createVendaDto);
   }
 
