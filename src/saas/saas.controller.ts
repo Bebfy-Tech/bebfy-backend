@@ -7,7 +7,9 @@ import {
   Body,
   ParseIntPipe,
   UseGuards,
+  Req,
 } from '@nestjs/common';
+import { DefinirInadimplenciaDto, LiberarAcessoTemporarioDto } from './dto/liberacao-financeira.dto';
 import { SaasService } from './saas.service';
 import { SaasAuthGuard, SaasPermissionGuard } from './saas-auth.guard';
 import { AlterarStatusEmpresaDto } from './dto/alterar-status-empresa.dto';
@@ -47,6 +49,18 @@ export class SaasController {
     @Body() dto: AlterarStatusEmpresaDto,
   ) {
     return this.saasService.alterarStatusEmpresa(id, dto.status);
+  }
+
+  @UseGuards(SaasPermissionGuard('EMPRESAS'))
+  @Patch('empresas/:id/inadimplencia')
+  definirInadimplencia(@Param('id', ParseIntPipe) id: number, @Body() dto: DefinirInadimplenciaDto) {
+    return this.saasService.definirInadimplencia(id, dto.inadimplente);
+  }
+
+  @UseGuards(SaasPermissionGuard('EMPRESAS'))
+  @Post('empresas/:id/liberar-acesso')
+  liberarAcesso(@Param('id', ParseIntPipe) id: number, @Req() req: any, @Body() dto: LiberarAcessoTemporarioDto) {
+    return this.saasService.liberarTemporariamente(id, req.saasUser.id, dto.dias, dto.motivo);
   }
 
   @UseGuards(SaasPermissionGuard('MODULOS'))
