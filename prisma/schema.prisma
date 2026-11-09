@@ -150,6 +150,7 @@ model Usuario {
   permissoes    String[]
   primeiroAcesso Boolean @default(false)
   sessaoId      String?
+  ultimaAtividadeEm DateTime?
   criadoEm      DateTime    @default(now())
   atualizadoEm  DateTime    @updatedAt
 
