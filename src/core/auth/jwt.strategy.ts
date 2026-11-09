@@ -39,6 +39,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
                 subdominio: true,
                 slug: true,
                 status: true,
+              inadimplente: true,
+              liberacaoFinanceiraAte: true,
               },
             },
           },
@@ -54,6 +56,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     if (payload.empresaId !== usuario.funcionario.empresaId || !['ATIVA', 'EM_TESTE'].includes(usuario.funcionario.empresa.status)) {
       throw new UnauthorizedException('A empresa vinculada a este utilizador encontra-se inativa.');
+    }
+
+    if (usuario.funcionario.empresa.inadimplente && (!usuario.funcionario.empresa.liberacaoFinanceiraAte || usuario.funcionario.empresa.liberacaoFinanceiraAte.getTime() <= Date.now())) {
+      throw new UnauthorizedException('Acesso bloqueado por pendência financeira.');
     }
 
     if (!usuario.ultimaAtividadeEm ||
