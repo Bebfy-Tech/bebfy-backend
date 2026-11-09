@@ -7,6 +7,8 @@ import {
   Param,
   Delete,
   UseGuards,
+  ForbiddenException,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -29,6 +31,12 @@ import { CurrentTenant } from '../../common/decorators/current-tenant.decorator'
 export class ClientesController {
   constructor(private readonly clientesService: ClientesService) {}
 
+  private exigirGestor(req: any) {
+    if (!['PROPRIETARIO', 'ADMINISTRADOR', 'GERENTE'].includes(req.user?.cargo)) {
+      throw new ForbiddenException('Alteração de limite de crédito e exclusão restritas a gestores.');
+    }
+  }
+
   @ApiOperation({
     summary: 'Cadastrar novo cliente',
     description: 'Regista um novo cliente com limite de crédito e controlo de vasilhames em posse.',
@@ -38,7 +46,9 @@ export class ClientesController {
   create(
     @CurrentTenant() empresaId: number,
     @Body() createClienteDto: CreateClienteDto,
+    @Req() req: any,
   ) {
+    if (createClienteDto.limiteCredito !== undefined) this.exigirGestor(req);
     return this.clientesService.create(empresaId, createClienteDto);
   }
 
@@ -78,7 +88,9 @@ export class ClientesController {
     @CurrentTenant() empresaId: number,
     @Param('id') id: string,
     @Body() updateClienteDto: UpdateClienteDto,
+    @Req() req: any,
   ) {
+    if (updateClienteDto.limiteCredito !== undefined) this.exigirGestor(req);
     return this.clientesService.update(empresaId, id, updateClienteDto);
   }
 
@@ -92,7 +104,9 @@ export class ClientesController {
   remove(
     @CurrentTenant() empresaId: number,
     @Param('id') id: string,
+    @Req() req: any,
   ) {
+    this.exigirGestor(req);
     return this.clientesService.remove(empresaId, id);
   }
 }
