@@ -5,6 +5,15 @@ import { CriarEmpresaDto } from './dto/criar-empresa.dto';
 import { CriarPlanoDto, AtualizarPlanoDto } from './dto/criar-plano.dto';
 import * as bcrypt from 'bcrypt';
 
+// Never allow a new store to shadow platform/admin, public or app routes.
+const RESERVED_SLUGS = new Set([
+  'saas','api','admin','acessar','login','logout','dashboard','pdv',
+  'primeiro-acesso','produtos','clientes','funcionarios','categorias',
+  'lotes','estoque','financeiro','caixas','vendas','delivery','fiados',
+  'vasilhames','fornecedores','relatorios','configuracoes','assets',
+  'static','www','health','favicon.ico','robots.txt',
+]);
+
 @Injectable()
 export class SaasService {
   constructor(private readonly prisma: PrismaService) {}
@@ -12,6 +21,9 @@ export class SaasService {
   async criarEmpresa(dto: CriarEmpresaDto) {
     const cnpj = dto.documento.replace(/\D/g, '');
     const subdominio = dto.subdominio.trim().toLowerCase();
+    if (RESERVED_SLUGS.has(subdominio)) {
+      throw new ConflictException('Esse endereço é reservado pela plataforma Bebfy. Escolha outro identificador.');
+    }
     const email = dto.email.trim().toLowerCase();
     if (!/^\d{14}$/.test(cnpj)) {
       throw new ConflictException('CNPJ precisa conter 14 dígitos.');
