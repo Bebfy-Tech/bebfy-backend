@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { PrismaClient, StatusEmpresa, TipoPlano } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
