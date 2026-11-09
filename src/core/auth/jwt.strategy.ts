@@ -47,7 +47,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Utilizador não encontrado ou sem vínculo de funcionário.');
     }
 
-    if (payload.empresaId !== usuario.funcionario.empresaId || usuario.funcionario.empresa.status !== 'ATIVA') {
+    if (payload.empresaId !== usuario.funcionario.empresaId || !['ATIVA', 'EM_TESTE'].includes(usuario.funcionario.empresa.status)) {
       throw new UnauthorizedException('A empresa vinculada a este utilizador encontra-se inativa.');
     }
 
