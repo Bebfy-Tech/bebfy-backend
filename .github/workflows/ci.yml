@@ -68,3 +68,5 @@ jobs:
         run: npm run build
       - name: PostgreSQL multi-tenant and concurrent sales integration tests
         run: npm run test:integration
+      - name: Audit stored password hashes without exposing credentials
+        run: npm run security:audit-passwords
