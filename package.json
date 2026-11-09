@@ -21,6 +21,7 @@
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "test:integration": "vitest run --config ./vitest.config.integration.ts",
     "security:audit-passwords": "ts-node scripts/audit-credentials.ts",
+    "dev:create-test-company": "ts-node scripts/create-test-company.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {
