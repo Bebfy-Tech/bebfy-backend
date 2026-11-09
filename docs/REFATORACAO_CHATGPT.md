@@ -31,8 +31,9 @@ Configurar HTTPS, segredos em cofre e política de backup/restauração.
   exige cargo de gestão e respeita hierarquia de cargos.
 - `/financeiro/contas-pagar`, `/financeiro/contas-receber` e `/financeiro/resumo`
   oferecem lançamentos, status e totalizações básicas de contas.
-- `POST /notas-fiscais/importar-xml` aceita `{ xml, mapeamentos?: [{ numeroItem, produtoId }] }`
-  e registra entrada de estoque transacional; `GET /notas-fiscais` lista importações.
+- **Módulo NF-e/NFC-e desativado nesta fase**. Não existem rotas fiscais ativas nem emissão de documentos oficiais.
+  A entrada XML experimental permanece fora do `AppModule` e não está acessível pela API.
+- `GET /vendas/:id/comprovante` devolve um JSON de **comprovante comercial não fiscal**, sem chave ou protocolo fiscal, para futura impressão no frontend.
 - `/saas/admin/*` ativa gestão de empresas, planos e módulos, somente para superadministradores
   explicitamente cadastrados na variável de ambiente.
 - `/produtos/vasilhames/*` habilita controle de empréstimos e devoluções.
@@ -82,8 +83,7 @@ automaticamente todas as baixas históricas.
 
 ## Limitações a validar antes de produção
 
-- Importação de NF-e **não verifica autenticidade criptográfica**, certificado nem
-  situação junto à SEFAZ; o XML pode informar autorização sem prova externa.
+- A emissão de NF-e/NFC-e e a verificação externa junto à SEFAZ **não fazem parte do escopo atual**. Não habilitar rotas fiscais sem projeto e homologação próprios.
 - O módulo financeiro cobre contas manuais e totalizações; ainda não implementa
   conciliação bancária, lançamentos contábeis completos ou automação integral do PDV.
 - Preços informados pelo cliente no PDV exigem uma política final de precificação
@@ -94,6 +94,6 @@ automaticamente todas as baixas históricas.
   estorno/devolução; bloquear situações sem conciliação não substitui esse fluxo.
 - É necessário ampliar os testes de permissões, fraude, operações concorrentes,
   recuperação de falhas e isolamento entre empresas.
-- O frontend deve enviar `x-tenant` no login quando não estiver no subdomínio da loja.
+- O frontend deve enviar `x-tenant` no login, configurando `VITE_TENANT_SLUG`; o serviço Axios e os contratos tipados estão na branch `refactor/conexao-backend-chatgpt` do repositório frontend.
 - Monitoramento, backups operacionais, configuração DNS/HTTPS, dados reais e deploy
   devem ser validados no ambiente final antes do lançamento.
