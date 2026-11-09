@@ -39,6 +39,10 @@ export class FiadosService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      if (createFiadoDto.vendaId) {
+        const venda = await tx.venda.findFirst({ where: { id: createFiadoDto.vendaId, empresaId, clienteId: createFiadoDto.clienteId } });
+        if (!venda) throw new BadRequestException('Venda não pertence ao cliente e empresa informados.');
+      }
       let novoSaldo = saldoAtual;
       if (createFiadoDto.tipo === TipoTransacaoFiado.CREDITO) {
         novoSaldo -= valorNum;
@@ -46,6 +50,9 @@ export class FiadosService {
         novoSaldo += valorNum;
       }
 
+      if (novoSaldo < 0) {
+        throw new BadRequestException('Crédito superior ao saldo devedor.');
+      }
       await tx.cliente.update({
         where: { id: createFiadoDto.clienteId },
         data: {
@@ -82,10 +89,13 @@ export class FiadosService {
       }
       const novoSaldo = Number(cliente.saldoDevedor) - valorNum;
 
-      await tx.cliente.update({
-        where: { id: clienteId },
-        data: { saldoDevedor: novoSaldo },
+      const abatimento = await tx.cliente.updateMany({
+        where: { id: clienteId, empresaId, saldoDevedor: { gte: valorNum } },
+        data: { saldoDevedor: { decrement: valorNum } },
       });
+      if (abatimento.count !== 1) {
+        throw new BadRequestException('Saldo insuficiente ou alterado durante o pagamento.');
+      }
 
       const historico = await tx.historicoFiado.create({
         data: {
