@@ -29,4 +29,6 @@ jobs:
       - name: Unit tests
         run: npm test
       - name: E2E tests
+        env:
+          JWT_SECRET: ci-test-only-not-a-production-secret-at-least-32-characters
         run: npm run test:e2e
