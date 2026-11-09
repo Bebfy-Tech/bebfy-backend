@@ -39,6 +39,13 @@ export class VendasService {
       throw new NotFoundException('Funcionário não encontrado nesta empresa.');
     }
 
+    if (createVendaDto.clienteId) {
+      const cliente = await this.prisma.cliente.findFirst({
+        where: { id: createVendaDto.clienteId, empresaId, ativo: true },
+      });
+      if (!cliente) throw new NotFoundException('Cliente não pertence a esta empresa ou está inativo.');
+    }
+
     let subtotal = 0;
     let totalCascosNovos = 0;
 
@@ -72,11 +79,11 @@ export class VendasService {
     const taxaEntrega = Number(createVendaDto.taxaEntrega || 0);
     const valorTotal = subtotal - desconto + taxaEntrega;
 
-    const pagamentoFiado = createVendaDto.pagamentos.find(
-      (p) => p.formaPagamento === FormaPagamento.FIADO,
-    );
+    const valorFiado = createVendaDto.pagamentos
+      .filter(p => p.formaPagamento === FormaPagamento.FIADO)
+      .reduce((total, p) => total + Number(p.valor), 0);
 
-    if (pagamentoFiado) {
+    if (valorFiado > 0) {
       if (!createVendaDto.clienteId) {
         throw new BadRequestException(
           'É obrigatório informar o cliente para vendas com pagamento no FIADO.',
@@ -91,7 +98,6 @@ export class VendasService {
         throw new NotFoundException('Cliente informado para a venda não foi encontrado nesta empresa.');
       }
 
-      const valorFiado = Number(pagamentoFiado.valor);
       const saldoProjetado = Number(cliente.saldoDevedor) + valorFiado;
       const limiteCredito = Number(cliente.limiteCredito);
 
@@ -122,6 +128,15 @@ export class VendasService {
       : StatusAcerto.CONCLUIDO;
 
     return this.prisma.$transaction(async (tx) => {
+      // Serializa venda e fechamento por caixa, inclusive em requisições concorrentes.
+      const caixaTravado = await tx.caixa.updateMany({
+        where: { id: createVendaDto.caixaId, empresaId, status: StatusCaixa.ABERTO },
+        data: { status: StatusCaixa.ABERTO },
+      });
+      if (caixaTravado.count !== 1) {
+        throw new BadRequestException('Caixa fechado antes da conclusão da venda.');
+      }
+
       const venda = await tx.venda.create({
         data: {
           caixaId: createVendaDto.caixaId,
@@ -190,18 +205,28 @@ export class VendasService {
         });
       }
 
-      if (pagamentoFiado && createVendaDto.clienteId) {
-        const valorFiado = Number(pagamentoFiado.valor);
-        const clienteAtual = await tx.cliente.findUnique({
-          where: { id: createVendaDto.clienteId },
+      if (valorFiado > 0 && createVendaDto.clienteId) {
+        const clienteAtual = await tx.cliente.findFirst({
+          where: { id: createVendaDto.clienteId, empresaId, ativo: true },
         });
-
+        if (!clienteAtual) throw new NotFoundException('Cliente indisponível.');
         const novoSaldo = Number(clienteAtual.saldoDevedor) + valorFiado;
-
-        await tx.cliente.update({
-          where: { id: createVendaDto.clienteId },
-          data: { saldoDevedor: novoSaldo },
+        const limite = Number(clienteAtual.limiteCredito);
+        if (limite > 0 && novoSaldo > limite) {
+          throw new BadRequestException('Limite do fiado excedido durante a conclusão da venda.');
+        }
+        const atualizacao = await tx.cliente.updateMany({
+          where: {
+            id: createVendaDto.clienteId,
+            empresaId,
+            ativo: true,
+            saldoDevedor: { equals: clienteAtual.saldoDevedor },
+          },
+          data: { saldoDevedor: { increment: valorFiado } },
         });
+        if (atualizacao.count !== 1) {
+          throw new BadRequestException('Saldo do cliente alterado. Tente novamente.');
+        }
 
         await tx.historicoFiado.create({
           data: {
@@ -304,6 +329,13 @@ export class VendasService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      const caixaTravado = await tx.caixa.updateMany({
+        where: { id: venda.caixaId, empresaId, status: StatusCaixa.ABERTO },
+        data: { status: StatusCaixa.ABERTO },
+      });
+      if (caixaTravado.count !== 1) {
+        throw new BadRequestException('Cancelamento de vendas de caixa fechado exige estorno financeiro separado.');
+      }
       const bloqueio = await tx.venda.updateMany({
         where: { id, empresaId, status: StatusVenda.CONCLUIDA },
         data: { status: StatusVenda.CANCELADA },
@@ -346,17 +378,20 @@ export class VendasService {
       }
 
       // 3. Estorno do Fiado (se houver pagamento em FIADO)
-      const pagamentoFiado = venda.pagamentos.find(
-        (p) => p.formaPagamento === FormaPagamento.FIADO,
-      );
+      const valorFiadoCancelado = venda.pagamentos
+        .filter(p => p.formaPagamento === FormaPagamento.FIADO)
+        .reduce((total, p) => total + Number(p.valor), 0);
 
-      if (pagamentoFiado && venda.clienteId) {
-        const valorFiado = Number(pagamentoFiado.valor);
+      if (valorFiadoCancelado > 0 && venda.clienteId) {
+        const valorFiado = valorFiadoCancelado;
         const clienteAtual = await tx.cliente.findUnique({
           where: { id: venda.clienteId },
         });
 
-        const novoSaldo = Math.max(0, Number(clienteAtual.saldoDevedor) - valorFiado);
+        if (Number(clienteAtual.saldoDevedor) < valorFiado) {
+          throw new BadRequestException('Fiado já amortizado: concilie o pagamento antes de cancelar esta venda.');
+        }
+        const novoSaldo = Number(clienteAtual.saldoDevedor) - valorFiado;
 
         await tx.cliente.update({
           where: { id: venda.clienteId },
