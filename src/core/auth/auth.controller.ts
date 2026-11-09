@@ -26,9 +26,9 @@ export class AuthController {
   @Post('login')
   async login(
     @Body() dto: LoginDto,
-    @CurrentTenant() empresaId?: number,
+    @Request() req: any,
   ) {
-    return this.authService.login(dto, empresaId);
+    return this.authService.login(dto, req.empresa?.id);
   }
 
   // Validação de senha de gerente no PDV protegida por JWT, Tenant e Throttler
