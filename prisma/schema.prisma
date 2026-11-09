@@ -152,6 +152,8 @@ model Usuario {
   sessaoId      String?
   criadoEm      DateTime    @default(now())
   atualizadoEm  DateTime    @updatedAt
+
+  @@index([sessaoId])
 }
 
 // ====================================================
