@@ -70,3 +70,16 @@ jobs:
         run: npm run test:integration
       - name: Audit stored password hashes without exposing credentials
         run: npm run security:audit-passwords
+      - name: Create idempotent demo company in disposable PostgreSQL
+        env:
+          NODE_ENV: development
+          BEBFY_ALLOW_TEST_COMPANY: 'true'
+          BEBFY_TEST_CNPJ: '00000000000999'
+          BEBFY_TEST_OWNER_CPF: '11122233344'
+          BEBFY_TEST_OWNER_EMAIL: qa@bebfy.invalid
+          BEBFY_TEST_OWNER_PASSWORD: ci-only-example-password-never-reuse
+          BEBFY_TEST_OWNER_NAME: Operador QA
+          BEBFY_TEST_PHONE: '62999999999'
+        run: |
+          npm run dev:create-test-company
+          npm run dev:create-test-company
