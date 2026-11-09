@@ -104,6 +104,19 @@ export class VendasService {
       }
     }
 
+    if (valorTotal < 0) {
+      throw new BadRequestException('O valor total da venda não pode ser negativo.');
+    }
+    const totalPago = createVendaDto.pagamentos.reduce(
+      (sum, p) => sum + Number(p.valor) - Number(p.troco || 0), 0,
+    );
+    if (Math.abs(totalPago - valorTotal) > 0.009) {
+      throw new BadRequestException('A soma dos pagamentos, descontando o troco, deve ser igual ao total da venda.');
+    }
+    if (createVendaDto.pagamentos.some(p => Number(p.troco || 0) > 0 && p.formaPagamento !== FormaPagamento.DINHEIRO)) {
+      throw new BadRequestException('Troco somente é permitido em pagamentos em dinheiro.');
+    }
+
     const statusAcerto = createVendaDto.tipoEntrega === 'DELIVERY'
       ? StatusAcerto.PENDENTE
       : StatusAcerto.CONCLUIDO;
@@ -142,14 +155,13 @@ export class VendasService {
           },
         });
 
-        await tx.produto.update({
-          where: { id: item.produtoId },
-          data: {
-            estoqueAtual: {
-              decrement: unidadesParaAbater,
-            },
-          },
+        const baixa = await tx.produto.updateMany({
+          where: { id: item.produtoId, empresaId, ativo: true, estoqueAtual: { gte: unidadesParaAbater } },
+          data: { estoqueAtual: { decrement: unidadesParaAbater } },
         });
+        if (baixa.count !== 1) {
+          throw new BadRequestException('Estoque insuficiente ou produto indisponível durante a finalização da venda.');
+        }
       }
 
       for (const pag of createVendaDto.pagamentos) {
@@ -291,6 +303,13 @@ export class VendasService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      const bloqueio = await tx.venda.updateMany({
+        where: { id, empresaId, status: StatusVenda.CONCLUIDA },
+        data: { status: StatusVenda.CANCELADA },
+      });
+      if (bloqueio.count !== 1) {
+        throw new BadRequestException('Esta venda já foi cancelada ou não pode ser cancelada.');
+      }
       let totalCascosParaEstornar = 0;
 
       // 1. Devolve os produtos ao estoque e contabiliza cascos retornáveis
