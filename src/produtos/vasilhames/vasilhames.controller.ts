@@ -2,11 +2,13 @@ import { Controller, Post, Get, Param, Body, UseGuards } from '@nestjs/common';
 import { VasilhamesService } from './vasilhames.service';
 import { CriarMovimentacaoCascoDto } from './dto/criar-movimentacao-casco.dto';
 import { ExigirPermissao, PermissoesGuard } from '../../common/guards/permissoes.guard';
+import { ExigirModulo, ModuloAtivoGuard } from '../../common/guards/modulo-ativo.guard';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentEmpresa } from '../../core/auth/decorators/current-empresa.decorator';
 
-@UseGuards(JwtAuthGuard, TenantGuard, PermissoesGuard)
+@UseGuards(JwtAuthGuard, TenantGuard, PermissoesGuard, ModuloAtivoGuard)
+@ExigirModulo('VASILHAMES_RETORNAVEIS')
 @Controller('produtos/vasilhames')
 export class VasilhamesController {
   constructor(private readonly vasilhamesService: VasilhamesService) {}
