@@ -1,4 +1,4 @@
-import { Injectable, NestMiddleware, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NestMiddleware, NotFoundException } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -17,6 +17,11 @@ export class TenantMiddleware implements NestMiddleware {
       const fromSubdomain = suffix && host.endsWith(suffix)
         ? host.slice(0, -suffix.length)
         : '';
+      if (requestedTenant !== undefined &&
+          (typeof requestedTenant !== 'string' ||
+           !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(requestedTenant.trim().toLowerCase()))) {
+        throw new BadRequestException('Identificador de empresa inválido.');
+      }
       const subdominio = typeof requestedTenant === 'string' && requestedTenant.trim()
         ? requestedTenant.trim().toLowerCase()
         : (fromSubdomain && !fromSubdomain.includes('.') && fromSubdomain !== 'api'
