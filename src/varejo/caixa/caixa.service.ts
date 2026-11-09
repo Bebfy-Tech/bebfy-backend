@@ -76,76 +76,88 @@ export class CaixaService {
       );
     }
 
-    return this.prisma.movimentacaoCaixa.create({
-      data: {
-        caixaId,
-        tipo: movimentacaoDto.tipo,
-        valor: movimentacaoDto.valor,
-        categoria: movimentacaoDto.categoria,
-        observacao: movimentacaoDto.observacao,
-      },
+    return this.prisma.$transaction(async tx => {
+      const bloqueio = await tx.caixa.updateMany({
+        where: { id: caixaId, empresaId, status: StatusCaixa.ABERTO },
+        data: { status: StatusCaixa.ABERTO },
+      });
+      if (bloqueio.count !== 1) {
+        throw new BadRequestException('Caixa fechado antes da movimentação.');
+      }
+      return tx.movimentacaoCaixa.create({
+        data: {
+          caixaId,
+          tipo: movimentacaoDto.tipo,
+          valor: movimentacaoDto.valor,
+          categoria: movimentacaoDto.categoria,
+          observacao: movimentacaoDto.observacao,
+        },
+      });
     });
   }
 
   async fecharCaixa(
     empresaId: number,
     caixaId: string,
-    fecharCaixaDto: FecharCaixaDto,
+    dto: FecharCaixaDto,
   ) {
-    const caixa = await this.prisma.caixa.findFirst({
-      where: { 
-        id: caixaId,
-        operador: {
-          empresaId,
+    const saldoFisico = Number(dto.saldoFinalFisico);
+    if (!Number.isFinite(saldoFisico) || saldoFisico < 0) {
+      throw new BadRequestException('O saldo físico do caixa deve ser um valor não negativo.');
+    }
+
+    // O lock obtido por updateMany concilia com o lock utilizado na venda.
+    return this.prisma.$transaction(async tx => {
+      const bloqueio = await tx.caixa.updateMany({
+        where: { id: caixaId, empresaId, status: StatusCaixa.ABERTO },
+        data: { status: StatusCaixa.FECHADO },
+      });
+      if (bloqueio.count !== 1) {
+        throw new BadRequestException('Caixa inexistente, de outra empresa ou já fechado.');
+      }
+
+      const caixa = await tx.caixa.findFirst({
+        where: { id: caixaId, empresaId },
+        include: { movimentacoes: true },
+      });
+      if (!caixa) throw new NotFoundException('Caixa não encontrado.');
+
+      const totalSuprimentos = caixa.movimentacoes
+        .filter(m => m.tipo === TipoMovimentacaoCaixa.SUPRIMENTO)
+        .reduce((total, m) => total + Number(m.valor), 0);
+      const totalSangrias = caixa.movimentacoes
+        .filter(m => m.tipo === TipoMovimentacaoCaixa.SANGRIA)
+        .reduce((total, m) => total + Number(m.valor), 0);
+
+      const vendas = await tx.venda.findMany({
+        where: {
+          caixaId, empresaId, status: StatusVenda.CONCLUIDA,
+          OR: [
+            { tipoEntrega: 'RETIRADA_BALCAO' },
+            { statusAcerto: 'CONCLUIDO' },
+          ],
         },
-      },
-      include: {
-        operador: true,
-        movimentacoes: true,
-      },
-    });
+        include: { pagamentos: true },
+      });
+      const dinheiroVendas = vendas.reduce(
+        (total, venda) => total + venda.pagamentos
+          .filter(p => p.formaPagamento === FormaPagamento.DINHEIRO)
+          .reduce((sum, p) => sum + Number(p.valor) - Number(p.troco), 0),
+        0,
+      );
 
-    if (!caixa) {
-      throw new NotFoundException('Caixa não encontrado nesta empresa.');
-    }
-
-    if (caixa.status === StatusCaixa.FECHADO) {
-      throw new BadRequestException('Este caixa já se encontra FECHADO.');
-    }
-
-    const totalSuprimentos = caixa.movimentacoes
-      .filter((m) => m.tipo === TipoMovimentacaoCaixa.SUPRIMENTO)
-      .reduce((acc, m) => acc + Number(m.valor), 0);
-
-    const totalSangrias = caixa.movimentacoes
-      .filter((m) => m.tipo === TipoMovimentacaoCaixa.SANGRIA)
-      .reduce((acc, m) => acc + Number(m.valor), 0);
-
-    const vendas = await this.prisma.venda.findMany({
-      where: { caixaId, empresaId, status: StatusVenda.CONCLUIDA },
-      include: { pagamentos: true },
-    });
-    const dinheiroVendas = vendas.reduce(
-      (total, venda) => total + venda.pagamentos
-        .filter(p => p.formaPagamento === FormaPagamento.DINHEIRO)
-        .reduce((sum, p) => sum + Number(p.valor) - Number(p.troco), 0),
-      0,
-    );
-    const saldoInicial = Number(caixa.saldoInicial);
-    const saldoFinalSistema = saldoInicial + totalSuprimentos - totalSangrias + dinheiroVendas;
-
-    const saldoFisico = Number(fecharCaixaDto.saldoFinalFisico);
-    const quebraDeCaixa = saldoFisico - saldoFinalSistema;
-
-    return this.prisma.caixa.update({
-      where: { id: caixaId },
-      data: {
-        saldoFinalSistema,
-        saldoFinalFisico: saldoFisico,
-        quebraDeCaixa,
-        status: StatusCaixa.FECHADO,
-        fechadoEm: new Date(),
-      },
+      const saldoFinalSistema =
+        Number(caixa.saldoInicial) + totalSuprimentos - totalSangrias + dinheiroVendas;
+      return tx.caixa.update({
+        where: { id: caixaId },
+        data: {
+          saldoFinalSistema,
+          saldoFinalFisico: saldoFisico,
+          quebraDeCaixa: saldoFisico - saldoFinalSistema,
+          status: StatusCaixa.FECHADO,
+          fechadoEm: new Date(),
+        },
+      });
     });
   }
 
@@ -225,13 +237,28 @@ export class CaixaService {
       .filter((m) => m.tipo === TipoMovimentacaoCaixa.SANGRIA)
       .reduce((acc, m) => acc + Number(m.valor), 0);
 
+    const vendas = await this.prisma.venda.findMany({
+      where: {
+        caixaId, empresaId, status: StatusVenda.CONCLUIDA,
+        OR: [{ tipoEntrega: 'RETIRADA_BALCAO' }, { statusAcerto: 'CONCLUIDO' }],
+      },
+      include: { pagamentos: true },
+    });
+    const dinheiroVendas = vendas.reduce(
+      (total, venda) => total + venda.pagamentos
+        .filter(p => p.formaPagamento === FormaPagamento.DINHEIRO)
+        .reduce((sum, p) => sum + Number(p.valor) - Number(p.troco), 0),
+      0,
+    );
+
     return {
       caixaId: caixa.id,
       status: caixa.status,
       saldoInicial: caixa.saldoInicial,
       totalSuprimentos,
       totalSangrias,
-      saldoParcialSistema: Number(caixa.saldoInicial) + totalSuprimentos - totalSangrias,
+      totalDinheiroVendas: dinheiroVendas,
+      saldoParcialSistema: Number(caixa.saldoInicial) + totalSuprimentos - totalSangrias + dinheiroVendas,
       movimentacoes: caixa.movimentacoes,
     };
   }
