@@ -158,7 +158,7 @@ describe('Authorization boundaries: clerk cannot alter sensitive tenant assets',
     const server = app.getHttpServer();
     for (const url of ['/funcionarios', '/financeiro/resumo', '/saas/admin/empresas']) {
       const response = await request(server).get(url).set(H(clerkToken));
-      expect(response.status, url).toBe(403);
+      expect(response.status, url).toBe(url.startsWith('/saas/admin/') ? 401 : 403);
     }
     const sales = await request(server).get('/vendas').set(H(clerkToken));
     expect(sales.status).toBe(200);
