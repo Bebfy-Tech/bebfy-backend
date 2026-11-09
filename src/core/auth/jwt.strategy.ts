@@ -13,7 +13,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: { sub: string; email: string; empresaId?: number }) {
+  async validate(payload: { sub: string; email: string; empresaId?: number; sessaoId?: string; proposito?: string }) {
     const usuario = await this.prisma.usuario.findUnique({
       where: { id: payload.sub },
       select: {
@@ -21,6 +21,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         ativo: true,
         email: true,
         permissoes: true,
+        sessaoId: true,
+        primeiroAcesso: true,
         funcionarioId: true,
         funcionario: {
           select: {
@@ -43,7 +45,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       },
     });
 
-    if (!usuario || !usuario.ativo || !usuario.funcionario || !usuario.funcionario.ativo) {
+    if (!usuario || !usuario.ativo || !usuario.funcionario || !usuario.funcionario.ativo ||
+        usuario.primeiroAcesso || !payload.sessaoId || !usuario.sessaoId ||
+        payload.sessaoId !== usuario.sessaoId || payload.proposito === 'PRIMEIRO_ACESSO') {
       throw new UnauthorizedException('Utilizador não encontrado ou sem vínculo de funcionário.');
     }
 
@@ -54,7 +58,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     return {
       ...usuario,
       empresaId: usuario.funcionario.empresaId,
-      subdominio: (usuario.funcionario.empresa as any).subdominio || usuario.funcionario.empresa.slug,
+      subdominio: usuario.funcionario.empresa.subdominio || usuario.funcionario.empresa.slug,
       cargo: usuario.funcionario.cargo,
     };
   }
