@@ -12,6 +12,8 @@ import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ValidarGerenteDto } from './dto/validar-gerente.dto';
+import { AlterarSenhaPrimeiroAcessoDto } from './dto/alterar-senha-primeiro-acesso.dto';
+import { AlterarSenhaDto } from './dto/alterar-senha.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
@@ -29,6 +31,27 @@ export class AuthController {
     @Request() req: any,
   ) {
     return this.authService.login(dto, req.empresa?.id);
+  }
+
+  @Throttle({ strict: { limit: 5, ttl: 60000 } })
+  @HttpCode(HttpStatus.OK)
+  @Post('primeiro-acesso/alterar-senha')
+  alterarSenhaInicial(@Body() dto: AlterarSenhaPrimeiroAcessoDto) {
+    return this.authService.alterarPrimeiraSenha(dto);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('alterar-senha')
+  alterarSenha(@Request() req: any, @Body() dto: AlterarSenhaDto) {
+    return this.authService.alterarSenha(req.user.id, req.user.sessaoId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('logout')
+  logout(@Request() req: any) {
+    return this.authService.sair(req.user.id, req.user.sessaoId);
   }
 
   // Validação de senha de gerente no PDV protegida por JWT, Tenant e Throttler
