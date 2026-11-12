@@ -17,6 +17,7 @@ import { SaasService } from './saas.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { AnexoFinanceiroDto } from './dto/anexo-financeiro.dto';
+import { CriarChamadoSaasDto, AtualizarChamadoSaasDto, RegistrarInteracaoSaasDto } from './dto/chamado-saas.dto';
 import { SaasAuthGuard, SaasPermissionGuard } from './saas-auth.guard';
 import { AlterarStatusEmpresaDto } from './dto/alterar-status-empresa.dto';
 import { AlternarModuloDto } from './dto/alternar-modulo.dto';
@@ -32,6 +33,36 @@ import { CriarPlanoDto, AtualizarPlanoDto } from './dto/criar-plano.dto';
 @Controller('saas/admin')
 export class SaasController {
   constructor(private readonly saasService: SaasService) {}
+
+  @UseGuards(SaasPermissionGuard('SUPORTE'))
+  @Get('suporte/chamados')
+  listarChamados() {
+    return this.saasService.listarChamados();
+  }
+
+  @UseGuards(SaasPermissionGuard('SUPORTE'))
+  @Get('suporte/chamados/:id')
+  buscarChamado(@Param('id') id: string) {
+    return this.saasService.buscarChamado(id);
+  }
+
+  @UseGuards(SaasPermissionGuard('SUPORTE'))
+  @Post('suporte/chamados')
+  criarChamado(@Req() req: any, @Body() dto: CriarChamadoSaasDto) {
+    return this.saasService.criarChamado(req.saasUser.id, dto);
+  }
+
+  @UseGuards(SaasPermissionGuard('SUPORTE'))
+  @Patch('suporte/chamados/:id')
+  atualizarChamado(@Param('id') id: string, @Req() req: any, @Body() dto: AtualizarChamadoSaasDto) {
+    return this.saasService.atualizarChamado(id, req.saasUser.id, dto);
+  }
+
+  @UseGuards(SaasPermissionGuard('SUPORTE'))
+  @Post('suporte/chamados/:id/interacoes')
+  registrarInteracao(@Param('id') id: string, @Req() req: any, @Body() dto: RegistrarInteracaoSaasDto) {
+    return this.saasService.registrarInteracaoChamado(id, req.saasUser.id, dto.mensagem);
+  }
 
   @UseGuards(SaasPermissionGuard('EMPRESAS'))
   @Get('financeiro')
