@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { DefinirInadimplenciaDto, LiberarAcessoTemporarioDto } from './dto/liberacao-financeira.dto';
 import { SaasService } from './saas.service';
+import { SaasAuditInterceptor } from './saas-audit.interceptor';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { AnexoFinanceiroDto } from './dto/anexo-financeiro.dto';
@@ -31,6 +32,7 @@ import { AtualizarEmpresaSaasDto } from './dto/atualizar-empresa-saas.dto';
 import { CriarPlanoDto, AtualizarPlanoDto } from './dto/criar-plano.dto';
 
 @UseGuards(SaasAuthGuard)
+@UseInterceptors(SaasAuditInterceptor)
 @Controller('saas/admin')
 export class SaasController {
   constructor(private readonly saasService: SaasService) {}
