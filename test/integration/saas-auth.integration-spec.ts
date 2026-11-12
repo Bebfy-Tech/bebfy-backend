@@ -156,6 +156,44 @@ describe('SaaS: administradores independentes das distribuidoras', () => {
     expect(blockedGrace.status).toBe(400);
   });
 
+  it('registra OS manual com histórico WhatsApp, encaminha ao Dev e resolve com solução', async () => {
+    const server = app.getHttpServer();
+    const auth = await request(server).post('/saas/auth/login').send({codigo:code,senha:password});
+    expect(auth.status).toBe(200);
+    const token={ Authorization:'Bearer '+auth.body.access_token };
+    const create=await request(server).post('/saas/admin/suporte/chamados').set(token)
+      .send({empresaId:sampleCompanyId,titulo:'Falha ao abrir caixa no PDV',
+        descricao:'Cliente informou pelo WhatsApp que não consegue abrir o caixa.',
+        contatoNome:'Cliente QA',contatoTelefone:'62999998888',categoria:'ERRO',prioridade:'ALTA'});
+    expect(create.status).toBe(201);
+    expect(create.body.status).toBe('PENDENTE');
+    expect(create.body.comDev).toBe(false);
+    expect(create.body.numero).toBeGreaterThan(0);
+    const path='/saas/admin/suporte/chamados/'+create.body.id;
+    const toDev=await request(server).patch(path).set(token)
+      .send({status:'COM_DEV',comDev:true,devResponsavel:'Equipe Backend'});
+    expect(toDev.status).toBe(200);
+    expect(toDev.body.status).toBe('COM_DEV');
+    expect(toDev.body.comDev).toBe(true);
+    const message=await request(server).post(path+'/interacoes').set(token)
+      .send({mensagem:'Solicitamos evidências pelo WhatsApp e encaminhamos ao Dev.'});
+    expect(message.status).toBe(201);
+    const active=await request(server).get(path).set(token);
+    expect(active.status).toBe(200);
+    expect(active.body.eventos.map((x:{acao:string})=>x.acao)).toContain('INTERACAO_WHATSAPP');
+    const unresolved=await request(server).patch(path).set(token).send({status:'RESOLVIDO'});
+    expect(unresolved.status).toBe(400);
+    const resolved=await request(server).patch(path).set(token)
+      .send({status:'RESOLVIDO',solucao:'Corrigimos a configuração de caixa e o cliente confirmou.'});
+    expect(resolved.status).toBe(200);
+    expect(resolved.body.status).toBe('RESOLVIDO');
+    expect(resolved.body.comDev).toBe(false);
+    expect(resolved.body.resolvidoEm).toBeTruthy();
+    expect((await request(server).get('/saas/admin/suporte/chamados').set(token)).body
+      .some((c:{id:string})=>c.id===create.body.id)).toBe(true);
+    expect((await request(server).get(path)).status).toBe(401);
+  });
+
   it('controla cobranças, pagamentos parciais, documentos privados e histórico financeiro', async () => {
     const server = app.getHttpServer();
     const auth = await request(server).post('/saas/auth/login').send({codigo:code,senha:password});
