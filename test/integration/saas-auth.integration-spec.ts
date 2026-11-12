@@ -22,6 +22,7 @@ describe('SaaS: administradores independentes das distribuidoras', () => {
   let adminId = '';
   let collaboratorId = '';
   let sampleCompanyId = 0;
+  let reusedAdminToken = '';
   const code = 90000000 + Math.floor(Math.random() * 8000000);
   const password = 'senha-qa-forte-' + randomUUID();
   beforeAll(async () => {
@@ -160,7 +161,8 @@ describe('SaaS: administradores independentes das distribuidoras', () => {
     const server = app.getHttpServer();
     const auth = await request(server).post('/saas/auth/login').send({codigo:code,senha:password});
     expect(auth.status).toBe(200);
-    const token={ Authorization:'Bearer '+auth.body.access_token };
+    reusedAdminToken = auth.body.access_token;
+    const token={ Authorization:'Bearer '+reusedAdminToken };
     const create=await request(server).post('/saas/admin/suporte/chamados').set(token)
       .send({empresaId:sampleCompanyId,titulo:'Falha ao abrir caixa no PDV',
         descricao:'Cliente informou pelo WhatsApp que não consegue abrir o caixa.',
@@ -196,9 +198,8 @@ describe('SaaS: administradores independentes das distribuidoras', () => {
 
   it('controla cobranças, pagamentos parciais, documentos privados e histórico financeiro', async () => {
     const server = app.getHttpServer();
-    const auth = await request(server).post('/saas/auth/login').send({codigo:code,senha:password});
-    expect(auth.status).toBe(200);
-    const bearer = { Authorization: 'Bearer ' + auth.body.access_token };
+    expect(reusedAdminToken).toBeTruthy();
+    const bearer = { Authorization: 'Bearer ' + reusedAdminToken };
     await db.empresa.update({ where: { id: sampleCompanyId }, data: { status: 'ATIVA' } });
 
     const initial = await request(server).get('/saas/admin/financeiro').set(bearer);
