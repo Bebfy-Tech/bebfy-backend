@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ConflictException, BadRequestException }
 import { PrismaService } from '../core/prisma/prisma.service';
 import { StatusEmpresa, NomeModulo } from '@prisma/client';
 import { CriarEmpresaDto } from './dto/criar-empresa.dto';
+import { CriarCobrancaSaasDto } from './dto/cobranca-saas.dto';
 import { AtualizarEmpresaSaasDto } from './dto/atualizar-empresa-saas.dto';
 import { CriarPlanoDto, AtualizarPlanoDto } from './dto/criar-plano.dto';
 import * as bcrypt from 'bcrypt';
@@ -202,6 +203,35 @@ export class SaasService {
             select: { id: true, codigo: true, nome: true, cpf: true, telefone: true,
               usuario: { select: { email: true, ativo: true } } } } },
       });
+    });
+  }
+
+  async listarCobrancas(empresaId: number) {
+    await this.buscarEmpresaPorId(empresaId);
+    return this.prisma.saasCobranca.findMany({
+      where: { empresaId }, orderBy: { vencimento: 'desc' },
+      take: 200,
+    });
+  }
+
+  async criarCobranca(empresaId: number, dto: CriarCobrancaSaasDto) {
+    await this.buscarEmpresaPorId(empresaId);
+    const data=new Date(dto.vencimento);
+    if(Number.isNaN(data.getTime()))throw new BadRequestException('Vencimento inválido.');
+    return this.prisma.saasCobranca.create({
+      data: {
+        empresaId, referencia:dto.referencia.trim(), valor:dto.valor,
+        vencimento:data, linhaDigitavel:dto.linhaDigitavel?.trim()||null,
+        observacao:dto.observacao?.trim()||null,
+      },
+    });
+  }
+
+  async marcarPagamento(empresaId: number, cobrancaId: string, pago: boolean) {
+    const existing=await this.prisma.saasCobranca.findFirst({ where:{id:cobrancaId,empresaId} });
+    if(!existing)throw new NotFoundException('Cobrança não encontrada nesta distribuidora.');
+    return this.prisma.saasCobranca.update({
+      where:{id:cobrancaId},data:{pagoEm:pago?new Date():null},
     });
   }
 
