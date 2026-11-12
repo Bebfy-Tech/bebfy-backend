@@ -16,6 +16,7 @@ import { ValidarGerenteDto } from './dto/validar-gerente.dto';
 import { AlterarSenhaPrimeiroAcessoDto } from './dto/alterar-senha-primeiro-acesso.dto';
 import { AlterarSenhaDto } from './dto/alterar-senha.dto';
 import { AtualizarMeuPerfilDto } from './dto/atualizar-meu-perfil.dto';
+import { SolicitarRecuperacaoSenhaDto, ConfirmarRecuperacaoSenhaDto } from './dto/recuperar-senha.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
@@ -33,6 +34,20 @@ export class AuthController {
     @Request() req: any,
   ) {
     return this.authService.login(dto, req.empresa?.id);
+  }
+
+  @Throttle({ strict: {limit: 5, ttl: 60000} })
+  @Post('recuperar-senha/solicitar')
+  @HttpCode(HttpStatus.OK)
+  solicitarRecuperacao(@Body() dto: SolicitarRecuperacaoSenhaDto, @Request() req: any) {
+    return this.authService.solicitarRecuperacaoSenha(dto.login, req.empresa?.id);
+  }
+
+  @Throttle({ strict: {limit: 5, ttl: 60000} })
+  @Post('recuperar-senha/confirmar')
+  @HttpCode(HttpStatus.OK)
+  confirmarRecuperacao(@Body() dto: ConfirmarRecuperacaoSenhaDto, @Request() req: any) {
+    return this.authService.confirmarRecuperacaoSenha(dto, req.empresa?.id);
   }
 
   @Throttle({ strict: { limit: 5, ttl: 60000 } })
