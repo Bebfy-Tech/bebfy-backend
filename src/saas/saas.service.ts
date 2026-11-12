@@ -4,6 +4,7 @@ import { StatusEmpresa, NomeModulo } from '@prisma/client';
 import { CriarEmpresaDto } from './dto/criar-empresa.dto';
 import { CriarCobrancaSaasDto } from './dto/cobranca-saas.dto';
 import { RegistrarPagamentoSaasDto } from './dto/registrar-pagamento-saas.dto';
+import { AnexoFinanceiroDto } from './dto/anexo-financeiro.dto';
 import { AtualizarEmpresaSaasDto } from './dto/atualizar-empresa-saas.dto';
 import { CriarPlanoDto, AtualizarPlanoDto } from './dto/criar-plano.dto';
 import * as bcrypt from 'bcrypt';
@@ -284,6 +285,63 @@ export class SaasService {
       });
       return { ...pagamento, valor: Number(pagamento.valor) };
     });
+  }
+
+  async listarAnexosFinanceiros(empresaId: number) {
+    await this.buscarEmpresaPorId(empresaId);
+    return this.prisma.saasAnexoFinanceiro.findMany({
+      where: { empresaId },
+      select: { id: true, empresaId: true, cobrancaId: true, tipo: true, nome: true,
+        mime: true, tamanho: true, operadorId: true, criadoEm: true },
+      orderBy: { criadoEm: 'desc' },
+      take: 200,
+    });
+  }
+
+  async anexarFinanceiro(empresaId: number, operadorId: string, dto: AnexoFinanceiroDto, file: {
+    originalname?: string; mimetype?: string; size?: number; buffer?: Buffer;
+  }) {
+    await this.buscarEmpresaPorId(empresaId);
+    if (!file?.buffer?.length || !file.size || file.size > 2 * 1024 * 1024) {
+      throw new BadRequestException('O arquivo deve ter até 2 MB.');
+    }
+    const buffer = file.buffer;
+    const pdf = buffer.subarray(0, 5).toString('ascii') === '%PDF-';
+    const png = buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    const jpg = buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+    const mime = pdf ? 'application/pdf' : png ? 'image/png' : jpg ? 'image/jpeg' : null;
+    if (!mime) throw new BadRequestException('Envie um arquivo PDF, PNG ou JPG válido.');
+    if (dto.cobrancaId) {
+      const belongs = await this.prisma.saasCobranca.findFirst({
+        where: { id: dto.cobrancaId, empresaId }, select: { id: true },
+      });
+      if (!belongs) throw new BadRequestException('Cobrança não pertence a esta distribuidora.');
+    }
+    const ext = pdf ? '.pdf' : png ? '.png' : '.jpg';
+    const supplied = (file.originalname || 'documento').replace(/[\\/\\\\\\x00-\\x1f]/g, '_').trim().slice(0, 140);
+    const base = supplied.replace(/\\.[a-zA-Z0-9]{1,5}$/, '').replace(/[^\\p{L}\\p{N} ._()-]/gu, '_') || 'documento';
+    const name = base + ext;
+    return this.prisma.$transaction(async tx => {
+      const created = await tx.saasAnexoFinanceiro.create({
+        data: { empresaId, operadorId, cobrancaId: dto.cobrancaId ?? null,
+          tipo: dto.tipo, nome: name, mime, tamanho: buffer.length, conteudo: buffer },
+        select: { id: true, empresaId: true, cobrancaId: true, tipo: true, nome: true,
+          mime: true, tamanho: true, operadorId: true, criadoEm: true },
+      });
+      await tx.saasFinanceiroEvento.create({
+        data: { empresaId, operadorId, acao: 'ANEXO_FINANCEIRO',
+          descricao: dto.tipo + ': ' + name },
+      });
+      return created;
+    });
+  }
+
+  async baixarAnexoFinanceiro(empresaId: number, anexoId: string) {
+    const file = await this.prisma.saasAnexoFinanceiro.findFirst({
+      where: { id: anexoId, empresaId },
+    });
+    if (!file) throw new NotFoundException('Anexo financeiro não encontrado.');
+    return file;
   }
 
   async listarCobrancas(empresaId: number) {
