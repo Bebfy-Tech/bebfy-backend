@@ -4,7 +4,14 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
-  const senhaHash = await bcrypt.hash('123456', 10);
+  const senhaInicial = process.env.BEBFY_BOOTSTRAP_ADMIN_PASSWORD;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Script legado de bootstrap não pode ser executado em produção.');
+  }
+  if (!senhaInicial || senhaInicial.length < 12) {
+    throw new Error('Configure BEBFY_BOOTSTRAP_ADMIN_PASSWORD (mínimo 12 caracteres).');
+  }
+  const senhaHash = await bcrypt.hash(senhaInicial, 12);
 
   // 1. Cria o funcionário (forçando a conversão de tipo para ignorar o cache do TS)
     // src/criar-usuario.ts

@@ -48,6 +48,28 @@ enum NomeModulo {
   RELATORIOS_AVANCADOS
 }
 
+
+enum SaasCargo {
+  SUPER_ADMIN
+  OPERADOR
+}
+
+model SaasOperador {
+  id          String    @id @default(uuid())
+  codigo      Int       @unique
+  nome        String
+  email       String?   @unique
+  senha       String
+  cargo       SaasCargo @default(OPERADOR)
+  permissoes  String[]  @default([])
+  ativo       Boolean   @default(true)
+  sessaoId    String?
+  criadoEm    DateTime  @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@map("saas_operadores")
+}
+
 model Empresa {
   id                   Int                   @id @default(autoincrement())
   nomeFantasia         String
@@ -56,6 +78,16 @@ model Empresa {
   slug                 String                @unique
   subdominio           String?               @unique
   status               StatusEmpresa         @default(ATIVA)
+  inadimplente         Boolean               @default(false)
+  liberacaoFinanceiraAte DateTime?
+  historicoLiberacoes  SaasLiberacaoAcesso[]
+  cobrancasSaas       SaasCobranca[]
+  eventosFinanceiros  SaasFinanceiroEvento[]
+  anexosFinanceiros    SaasAnexoFinanceiro[]
+  chamadosSuporte     SaasChamado[]
+  configuracaoCobrancaSaas SaasConfiguracaoCobranca?
+  mensalidadesGeradasSaas SaasMensalidadeGerada[]
+  resetSenhaTokens     ResetSenhaToken[]
   planoId              Int?
   plano                Plano?                @relation(fields: [planoId], references: [id])
   criadoEm             DateTime              @default(now())
@@ -81,15 +113,203 @@ model Empresa {
   @@map("empresas")
 }
 
+model ResetSenhaToken {
+  id        String   @id @default(uuid())
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  empresaId Int
+  empresa   Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiraEm  DateTime
+  usadoEm   DateTime?
+  criadoEm  DateTime @default(now())
+
+  @@index([usuarioId, expiraEm])
+  @@map("reset_senha_tokens")
+}
+
+model SaasCobranca {
+  id            String   @id @default(uuid())
+  empresaId     Int
+  empresa       Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  referencia    String
+  valor         Decimal  @db.Decimal(10, 2)
+  vencimento    DateTime
+  pagoEm        DateTime?
+  linhaDigitavel String?
+  observacao    String?
+  criadoEm      DateTime @default(now())
+  pagamentos    SaasPagamento[]
+  anexos        SaasAnexoFinanceiro[]
+  mensalidadeGerada SaasMensalidadeGerada?
+
+  @@index([empresaId, vencimento])
+  @@map("saas_cobrancas")
+}
+
+model SaasPagamento {
+  id          String   @id @default(uuid())
+  cobrancaId  String
+  cobranca    SaasCobranca @relation(fields: [cobrancaId], references: [id], onDelete: Cascade)
+  valor       Decimal  @db.Decimal(10, 2)
+  pagoEm      DateTime
+  forma       String
+  observacao  String?
+  operadorId  String
+  criadoEm    DateTime @default(now())
+  @@index([cobrancaId, criadoEm])
+  @@map("saas_pagamentos")
+}
+
+model SaasAnexoFinanceiro {
+  id          String   @id @default(uuid())
+  empresaId   Int
+  empresa     Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  cobrancaId  String?
+  cobranca    SaasCobranca? @relation(fields: [cobrancaId], references: [id], onDelete: Cascade)
+  tipo        String
+  nome        String
+  mime        String
+  conteudo    Bytes    @db.ByteA
+  tamanho     Int
+  operadorId  String
+  criadoEm    DateTime @default(now())
+  @@index([empresaId, criadoEm])
+  @@map("saas_anexos_financeiros")
+}
+
+model SaasConfiguracaoCobranca {
+  empresaId       Int      @id
+  empresa         Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  recorrente      Boolean  @default(false)
+  diaVencimento   Int      @default(15)
+  atualizadoEm    DateTime @updatedAt
+  @@map("saas_configuracao_cobranca")
+}
+
+model SaasMensalidadeGerada {
+  id           String     @id @default(uuid())
+  empresaId    Int
+  empresa      Empresa    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  competencia  String
+  cobrancaId   String     @unique
+  cobranca     SaasCobranca @relation(fields: [cobrancaId], references: [id], onDelete: Cascade)
+  criadoEm     DateTime   @default(now())
+  @@unique([empresaId, competencia])
+  @@map("saas_mensalidades_geradas")
+}
+
+model SaasAuditoria {
+  id          String   @id @default(uuid())
+  operadorId  String
+  metodo      String
+  rota        String
+  campos      String[] @default([])
+  recursoId   String?
+  criadoEm    DateTime @default(now())
+  @@index([criadoEm])
+  @@index([operadorId, criadoEm])
+  @@map("saas_auditoria")
+}
+
+model SaasChamado {
+  id             String   @id @default(uuid())
+  numero         Int      @unique @default(autoincrement())
+  empresaId      Int
+  empresa        Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  titulo         String
+  descricao      String   @db.Text
+  contatoNome    String?
+  contatoTelefone String?
+  categoria      String   @default("DUVIDA")
+  prioridade     String   @default("NORMAL")
+  status         String   @default("PENDENTE")
+  comDev         Boolean  @default(false)
+  responsavelId  String?
+  devResponsavel String?
+  solucao        String?  @db.Text
+  abertoPorId    String
+  resolvidoEm    DateTime?
+  criadoEm       DateTime @default(now())
+  atualizadoEm   DateTime @updatedAt
+  eventos        SaasChamadoEvento[]
+  anexos         SaasChamadoAnexo[]
+  @@index([empresaId, criadoEm])
+  @@index([status, prioridade, atualizadoEm])
+  @@map("saas_chamados")
+}
+
+model SaasChamadoAnexo {
+  id          String    @id @default(uuid())
+  chamadoId   String
+  chamado     SaasChamado @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+  nome        String
+  mime        String
+  tamanho     Int
+  conteudo    Bytes     @db.ByteA
+  operadorId  String
+  criadoEm    DateTime  @default(now())
+  @@index([chamadoId, criadoEm])
+  @@map("saas_chamado_anexos")
+}
+
+model SaasChamadoEvento {
+  id          String      @id @default(uuid())
+  chamadoId   String
+  chamado     SaasChamado @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+  operadorId  String
+  acao        String
+  mensagem    String      @db.Text
+  criadoEm    DateTime    @default(now())
+  @@index([chamadoId, criadoEm])
+  @@map("saas_chamado_eventos")
+}
+
+model SaasFinanceiroEvento {
+  id          String   @id @default(uuid())
+  empresaId   Int
+  empresa     Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  operadorId  String
+  acao        String
+  descricao   String
+  criadoEm    DateTime @default(now())
+  @@index([empresaId, criadoEm])
+  @@map("saas_financeiro_eventos")
+}
+
+model SaasLiberacaoAcesso {
+  id          String   @id @default(uuid())
+  empresaId   Int
+  empresa     Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  operadorId  String
+  dias        Int
+  motivo      String
+  liberadoAte DateTime
+  criadoEm    DateTime @default(now())
+
+  @@index([empresaId, criadoEm])
+  @@map("saas_liberacoes_acesso")
+}
+
 model Plano {
   id          Int        @id @default(autoincrement())
   nome        String
   tipo        TipoPlano  @default(VAREJO_BASICO)
   precoMensal Decimal    @db.Decimal(10, 2)
   empresas    Empresa[]
+  modulosPadrao NomeModulo[] @default([])
   criadoEm    DateTime   @default(now())
 
   @@map("planos")
+}
+
+model SaasModuloDescricao {
+  modulo    NomeModulo @id
+  nome      String
+  descricao String
+  atualizadoEm DateTime @updatedAt
+
+  @@map("saas_modulo_descricoes")
 }
 
 model EmpresaModulo {
@@ -147,9 +367,15 @@ model Usuario {
   ativo         Boolean     @default(true)
   funcionarioId String      @unique
   funcionario   Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
+  resetSenhaTokens ResetSenhaToken[]
   permissoes    String[]
+  primeiroAcesso Boolean @default(false)
+  sessaoId      String?
+  ultimaAtividadeEm DateTime?
   criadoEm      DateTime    @default(now())
   atualizadoEm  DateTime    @updatedAt
+
+  @@index([sessaoId])
 }
 
 // ====================================================
@@ -256,6 +482,8 @@ model Fornecedor {
   nomeFantasia String?
   telefone     String?
   email        String?
+  inscricaoEstadual String?
+  endereco     String?
   observacao   String?      // Campo de observação no rodapé
   criadoEm     DateTime     @default(now())
 
@@ -462,6 +690,7 @@ model ItemVenda {
   quantidade    Int
   precoUnitario Decimal
   precoTotal    Decimal
+  unidadesEstoque Int?      // Quantidade real de unidades abatidas (fardos inclusos)
   criadoEm      DateTime @default(now())
 }
 

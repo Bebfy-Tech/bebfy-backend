@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CreateLoteDto } from './dto/create-lote.dto';
 
@@ -20,6 +20,7 @@ export class LotesService {
     return this.prisma.$transaction(async (tx) => {
       const lote = await tx.loteProduto.create({
         data: {
+          empresaId,
           produtoId: createLoteDto.produtoId,
           quantidade: createLoteDto.quantidade,
           numeroLote: createLoteDto.numeroLote,
@@ -82,14 +83,17 @@ export class LotesService {
     const lote = await this.findOne(empresaId, id);
 
     return this.prisma.$transaction(async (tx) => {
-      await tx.produto.update({
-        where: { id: lote.produtoId },
-        data: {
-          estoqueAtual: {
-            decrement: lote.quantidade,
-          },
+      const baixa = await tx.produto.updateMany({
+        where: {
+          id: lote.produtoId,
+          empresaId,
+          estoqueAtual: { gte: lote.quantidade },
         },
+        data: { estoqueAtual: { decrement: lote.quantidade } },
       });
+      if (baixa.count !== 1) {
+        throw new BadRequestException('O lote não pode ser removido: o estoque atual não comporta o estorno.');
+      }
 
       return tx.loteProduto.delete({
         where: { id },

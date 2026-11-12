@@ -1,0 +1,74 @@
+name: Bebfy Safe Dependency Patch Trial
+
+on:
+  push:
+    paths:
+      - '.github/workflows/dependency-patch-validation.yml'
+    branches: [refactor/codigo-chatgpt]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  compatible-dependency-upgrade:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bebfy_test
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: bebfy_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bebfy_test -d bebfy_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://bebfy_test:test-only-password@localhost:5432/bebfy_test?schema=public
+      JWT_SECRET: test-only-dependency-patches-never-use-in-production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/codigo-chatgpt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Upgrade unsafe bcrypt and inactive XML parser, then apply nonbreaking fixes
+        run: |
+          npm ci
+          npm install bcrypt@^6.0.0 fast-xml-parser@^5.12.0
+          npm audit fix || true
+      - name: Verify Prisma, TypeScript, ESLint and unit tests
+        run: |
+          npx prisma validate
+          npx prisma migrate deploy
+          npm run build
+          npm run lint
+          npm test
+          npm run test:e2e
+          npm run test:integration
+      - name: Compare runtime production security advisories
+        run: |
+          npm audit --omit=dev --json > /tmp/after-audit.json || true
+          node - <<'NODE'
+          const fs=require('fs');
+          const d=JSON.parse(fs.readFileSync('/tmp/after-audit.json','utf8'));
+          console.log('PATCH_RESULT_RUNTIME',JSON.stringify(d.metadata?.vulnerabilities||{}));
+          NODE
+      - name: Commit only validated dependency manifest and lock changes
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo 'No dependency changes needed.'
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "security(deps): validated bcrypt 6, XML parser 5 and compatible npm security patches"
+          git push origin HEAD:refactor/codigo-chatgpt

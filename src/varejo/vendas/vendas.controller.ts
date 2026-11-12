@@ -7,6 +7,8 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Req,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -16,17 +18,21 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { VendasService } from './vendas.service';
+import { ComprovanteService } from './comprovante.service';
 import { CreateVendaDto } from './dto/create-venda.dto';
+import { ExigirPermissao, PermissoesGuard } from '../../common/guards/permissoes.guard';
+import { ExigirModulo, ModuloAtivoGuard } from '../../common/guards/modulo-ativo.guard';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 
 @ApiTags('Vendas & PDV')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, TenantGuard, PermissoesGuard, ModuloAtivoGuard)
+@ExigirModulo('CAIXA_PDV')
 @Controller('vendas')
 export class VendasController {
-  constructor(private readonly vendasService: VendasService) {}
+  constructor(private readonly vendasService: VendasService, private readonly comprovantes: ComprovanteService) {}
 
   @ApiOperation({
     summary: 'Registrar uma nova venda no PDV',
@@ -39,7 +45,11 @@ export class VendasController {
   async create(
     @CurrentTenant() empresaId: number,
     @Body() createVendaDto: CreateVendaDto,
+    @Req() req: any,
   ) {
+    if (createVendaDto.funcionarioId !== req.user?.funcionarioId) {
+      throw new ForbiddenException('A venda deve pertencer ao operador autenticado.');
+    }
     return this.vendasService.create(empresaId, createVendaDto);
   }
 
@@ -58,6 +68,7 @@ export class VendasController {
     description: 'Retorna vendas marcadas como delivery aguardando acerto de contas pelo entregador.',
   })
   @ApiResponse({ status: 200, description: 'Vendas pendentes de delivery retornadas.' })
+  @ExigirModulo('ENTREGAS_DELIVERY')
   @Get('pendentes-acerto-delivery')
   async listarPendentesAcertoDelivery(@CurrentTenant() empresaId: number) {
     return this.vendasService.listarPendentesAcertoDelivery(empresaId);
@@ -68,6 +79,8 @@ export class VendasController {
     description: 'Atualiza o status de acerto de uma lista de vendas para CONCLUIDO.',
   })
   @ApiResponse({ status: 200, description: 'Acerto de delivery confirmado.' })
+  @ExigirModulo('ENTREGAS_DELIVERY')
+  @ExigirPermissao('DELIVERY_ACERTAR')
   @Post('confirmar-acerto-delivery')
   @HttpCode(HttpStatus.OK)
   async confirmarAcertoDelivery(
@@ -75,6 +88,12 @@ export class VendasController {
     @Body('vendaIds') vendaIds: string[],
   ) {
     return this.vendasService.confirmarAcertoDelivery(empresaId, vendaIds);
+  }
+
+  @ApiOperation({ summary: 'Comprovante comercial não fiscal para impressão' })
+  @Get(':id/comprovante')
+  obterComprovante(@CurrentTenant() empresaId: number, @Param('id') id: string) {
+    return this.comprovantes.obter(empresaId, id);
   }
 
   @ApiOperation({
@@ -100,6 +119,7 @@ export class VendasController {
   @ApiParam({ name: 'id', description: 'ID da venda a cancelar' })
   @ApiResponse({ status: 200, description: 'Venda cancelada e estornos efetuados.' })
   @ApiResponse({ status: 400, description: 'Venda já se encontra cancelada.' })
+  @ExigirPermissao('VENDAS_CANCELAR')
   @Post(':id/cancelar')
   @HttpCode(HttpStatus.OK)
   async cancelarVenda(

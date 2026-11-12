@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CreateVendaDto } from './dto/create-venda.dto';
@@ -11,6 +12,7 @@ import {
   StatusVenda,
   StatusAcerto,
   TipoTransacaoFiado,
+  TipoEntrega,
 } from '@prisma/client';
 
 @Injectable()
@@ -18,6 +20,16 @@ export class VendasService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(empresaId: number, createVendaDto: CreateVendaDto) {
+    // A disabled delivery module cannot be bypassed by submitting DELIVERY via PDV.
+    if (createVendaDto.tipoEntrega === TipoEntrega.DELIVERY) {
+      const module = await this.prisma.empresaModulo.findUnique({
+        where: { empresaId_modulo: { empresaId, modulo: 'ENTREGAS_DELIVERY' } },
+        select: { ativo: true },
+      });
+      if (module && !module.ativo) {
+        throw new ForbiddenException('Módulo de entregas desativado para esta distribuidora.');
+      }
+    }
     const caixa = await this.prisma.caixa.findUnique({
       where: { id: createVendaDto.caixaId },
       include: { operador: true },
@@ -25,6 +37,10 @@ export class VendasService {
 
     if (!caixa || caixa.empresaId !== empresaId) {
       throw new NotFoundException('Caixa informado não foi encontrado nesta empresa.');
+    }
+
+    if (caixa.operadorId !== createVendaDto.funcionarioId) {
+      throw new BadRequestException('O caixa informado pertence a outro funcionário.');
     }
 
     if (caixa.status !== StatusCaixa.ABERTO) {
@@ -37,6 +53,13 @@ export class VendasService {
 
     if (!funcionario) {
       throw new NotFoundException('Funcionário não encontrado nesta empresa.');
+    }
+
+    if (createVendaDto.clienteId) {
+      const cliente = await this.prisma.cliente.findFirst({
+        where: { id: createVendaDto.clienteId, empresaId, ativo: true },
+      });
+      if (!cliente) throw new NotFoundException('Cliente não pertence a esta empresa ou está inativo.');
     }
 
     let subtotal = 0;
@@ -72,11 +95,11 @@ export class VendasService {
     const taxaEntrega = Number(createVendaDto.taxaEntrega || 0);
     const valorTotal = subtotal - desconto + taxaEntrega;
 
-    const pagamentoFiado = createVendaDto.pagamentos.find(
-      (p) => p.formaPagamento === FormaPagamento.FIADO,
-    );
+    const valorFiado = createVendaDto.pagamentos
+      .filter(p => p.formaPagamento === FormaPagamento.FIADO)
+      .reduce((total, p) => total + Number(p.valor), 0);
 
-    if (pagamentoFiado) {
+    if (valorFiado > 0) {
       if (!createVendaDto.clienteId) {
         throw new BadRequestException(
           'É obrigatório informar o cliente para vendas com pagamento no FIADO.',
@@ -91,7 +114,6 @@ export class VendasService {
         throw new NotFoundException('Cliente informado para a venda não foi encontrado nesta empresa.');
       }
 
-      const valorFiado = Number(pagamentoFiado.valor);
       const saldoProjetado = Number(cliente.saldoDevedor) + valorFiado;
       const limiteCredito = Number(cliente.limiteCredito);
 
@@ -104,11 +126,33 @@ export class VendasService {
       }
     }
 
+    if (valorTotal < 0) {
+      throw new BadRequestException('O valor total da venda não pode ser negativo.');
+    }
+    const totalPago = createVendaDto.pagamentos.reduce(
+      (sum, p) => sum + Number(p.valor) - Number(p.troco || 0), 0,
+    );
+    if (Math.abs(totalPago - valorTotal) > 0.009) {
+      throw new BadRequestException('A soma dos pagamentos, descontando o troco, deve ser igual ao total da venda.');
+    }
+    if (createVendaDto.pagamentos.some(p => Number(p.troco || 0) > 0 && p.formaPagamento !== FormaPagamento.DINHEIRO)) {
+      throw new BadRequestException('Troco somente é permitido em pagamentos em dinheiro.');
+    }
+
     const statusAcerto = createVendaDto.tipoEntrega === 'DELIVERY'
       ? StatusAcerto.PENDENTE
       : StatusAcerto.CONCLUIDO;
 
     return this.prisma.$transaction(async (tx) => {
+      // Serializa venda e fechamento por caixa, inclusive em requisições concorrentes.
+      const caixaTravado = await tx.caixa.updateMany({
+        where: { id: createVendaDto.caixaId, empresaId, status: StatusCaixa.ABERTO },
+        data: { status: StatusCaixa.ABERTO },
+      });
+      if (caixaTravado.count !== 1) {
+        throw new BadRequestException('Caixa fechado antes da conclusão da venda.');
+      }
+
       const venda = await tx.venda.create({
         data: {
           caixaId: createVendaDto.caixaId,
@@ -137,19 +181,19 @@ export class VendasService {
             vendaId: venda.id,
             produtoId: item.produtoId,
             quantidade: item.quantidade,
+            unidadesEstoque: unidadesParaAbater,
             precoUnitario: item.precoUnitario,
             precoTotal: item.quantidade * Number(item.precoUnitario),
           },
         });
 
-        await tx.produto.update({
-          where: { id: item.produtoId },
-          data: {
-            estoqueAtual: {
-              decrement: unidadesParaAbater,
-            },
-          },
+        const baixa = await tx.produto.updateMany({
+          where: { id: item.produtoId, empresaId, ativo: true, estoqueAtual: { gte: unidadesParaAbater } },
+          data: { estoqueAtual: { decrement: unidadesParaAbater } },
         });
+        if (baixa.count !== 1) {
+          throw new BadRequestException('Estoque insuficiente ou produto indisponível durante a finalização da venda.');
+        }
       }
 
       for (const pag of createVendaDto.pagamentos) {
@@ -177,18 +221,28 @@ export class VendasService {
         });
       }
 
-      if (pagamentoFiado && createVendaDto.clienteId) {
-        const valorFiado = Number(pagamentoFiado.valor);
-        const clienteAtual = await tx.cliente.findUnique({
-          where: { id: createVendaDto.clienteId },
+      if (valorFiado > 0 && createVendaDto.clienteId) {
+        const clienteAtual = await tx.cliente.findFirst({
+          where: { id: createVendaDto.clienteId, empresaId, ativo: true },
         });
-
+        if (!clienteAtual) throw new NotFoundException('Cliente indisponível.');
         const novoSaldo = Number(clienteAtual.saldoDevedor) + valorFiado;
-
-        await tx.cliente.update({
-          where: { id: createVendaDto.clienteId },
-          data: { saldoDevedor: novoSaldo },
+        const limite = Number(clienteAtual.limiteCredito);
+        if (limite > 0 && novoSaldo > limite) {
+          throw new BadRequestException('Limite do fiado excedido durante a conclusão da venda.');
+        }
+        const atualizacao = await tx.cliente.updateMany({
+          where: {
+            id: createVendaDto.clienteId,
+            empresaId,
+            ativo: true,
+            saldoDevedor: { equals: clienteAtual.saldoDevedor },
+          },
+          data: { saldoDevedor: { increment: valorFiado } },
         });
+        if (atualizacao.count !== 1) {
+          throw new BadRequestException('Saldo do cliente alterado. Tente novamente.');
+        }
 
         await tx.historicoFiado.create({
           data: {
@@ -291,15 +345,27 @@ export class VendasService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      const caixaTravado = await tx.caixa.updateMany({
+        where: { id: venda.caixaId, empresaId, status: StatusCaixa.ABERTO },
+        data: { status: StatusCaixa.ABERTO },
+      });
+      if (caixaTravado.count !== 1) {
+        throw new BadRequestException('Cancelamento de vendas de caixa fechado exige estorno financeiro separado.');
+      }
+      const bloqueio = await tx.venda.updateMany({
+        where: { id, empresaId, status: StatusVenda.CONCLUIDA },
+        data: { status: StatusVenda.CANCELADA },
+      });
+      if (bloqueio.count !== 1) {
+        throw new BadRequestException('Esta venda já foi cancelada ou não pode ser cancelada.');
+      }
       let totalCascosParaEstornar = 0;
 
       // 1. Devolve os produtos ao estoque e contabiliza cascos retornáveis
       for (const item of venda.itens) {
         const produto = await tx.produto.findUnique({ where: { id: item.produtoId } });
 
-        const unidades = (item as any)?.isFardo
-          ? item.quantidade * (produto?.fardoQuantidade || 1)
-          : item.quantidade;
+        const unidades = item.unidadesEstoque ?? item.quantidade;
 
         await tx.produto.update({
           where: { id: item.produtoId },
@@ -328,17 +394,20 @@ export class VendasService {
       }
 
       // 3. Estorno do Fiado (se houver pagamento em FIADO)
-      const pagamentoFiado = venda.pagamentos.find(
-        (p) => p.formaPagamento === FormaPagamento.FIADO,
-      );
+      const valorFiadoCancelado = venda.pagamentos
+        .filter(p => p.formaPagamento === FormaPagamento.FIADO)
+        .reduce((total, p) => total + Number(p.valor), 0);
 
-      if (pagamentoFiado && venda.clienteId) {
-        const valorFiado = Number(pagamentoFiado.valor);
+      if (valorFiadoCancelado > 0 && venda.clienteId) {
+        const valorFiado = valorFiadoCancelado;
         const clienteAtual = await tx.cliente.findUnique({
           where: { id: venda.clienteId },
         });
 
-        const novoSaldo = Math.max(0, Number(clienteAtual.saldoDevedor) - valorFiado);
+        if (Number(clienteAtual.saldoDevedor) < valorFiado) {
+          throw new BadRequestException('Fiado já amortizado: concilie o pagamento antes de cancelar esta venda.');
+        }
+        const novoSaldo = Number(clienteAtual.saldoDevedor) - valorFiado;
 
         await tx.cliente.update({
           where: { id: venda.clienteId },

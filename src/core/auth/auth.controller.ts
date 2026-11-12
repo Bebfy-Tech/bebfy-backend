@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   UseGuards,
   Request,
@@ -12,6 +13,10 @@ import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ValidarGerenteDto } from './dto/validar-gerente.dto';
+import { AlterarSenhaPrimeiroAcessoDto } from './dto/alterar-senha-primeiro-acesso.dto';
+import { AlterarSenhaDto } from './dto/alterar-senha.dto';
+import { AtualizarMeuPerfilDto } from './dto/atualizar-meu-perfil.dto';
+import { SolicitarRecuperacaoSenhaDto, ConfirmarRecuperacaoSenhaDto } from './dto/recuperar-senha.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
@@ -20,15 +25,56 @@ import { CurrentTenant } from '../../common/decorators/current-tenant.decorator'
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  // Rate Limiting Estrito: Bloqueia após 5 tentativas de login em 1 minuto
-  @Throttle({ strict: { limit: 5, ttl: 60000 } })
+  // Login inicial e confirmação de troca de sessão compartilham a mesma janela.
+  @Throttle({ strict: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   @Post('login')
   async login(
     @Body() dto: LoginDto,
-    @CurrentTenant() empresaId?: number,
+    @Request() req: any,
   ) {
-    return this.authService.login(dto, empresaId);
+    return this.authService.login(dto, req.empresa?.id);
+  }
+
+  @Throttle({ strict: {limit: 5, ttl: 60000} })
+  @Post('recuperar-senha/solicitar')
+  @HttpCode(HttpStatus.OK)
+  solicitarRecuperacao(@Body() dto: SolicitarRecuperacaoSenhaDto, @Request() req: any) {
+    return this.authService.solicitarRecuperacaoSenha(dto.login, req.empresa?.id);
+  }
+
+  @Throttle({ strict: {limit: 5, ttl: 60000} })
+  @Post('recuperar-senha/confirmar')
+  @HttpCode(HttpStatus.OK)
+  confirmarRecuperacao(@Body() dto: ConfirmarRecuperacaoSenhaDto, @Request() req: any) {
+    return this.authService.confirmarRecuperacaoSenha(dto, req.empresa?.id);
+  }
+
+  @Throttle({ strict: { limit: 5, ttl: 60000 } })
+  @HttpCode(HttpStatus.OK)
+  @Post('primeiro-acesso/alterar-senha')
+  alterarSenhaInicial(@Body() dto: AlterarSenhaPrimeiroAcessoDto) {
+    return this.authService.alterarPrimeiraSenha(dto);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('alterar-senha')
+  alterarSenha(@Request() req: any, @Body() dto: AlterarSenhaDto) {
+    return this.authService.alterarSenha(req.user.id, req.user.sessaoId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('logout')
+  logout(@Request() req: any) {
+    return this.authService.sair(req.user.id, req.user.sessaoId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @Patch('perfil')
+  atualizarMeuPerfil(@Request() req: any, @Body() dto: AtualizarMeuPerfilDto) {
+    return this.authService.atualizarMeuPerfil(req.user.id, req.user.empresaId, dto);
   }
 
   // Validação de senha de gerente no PDV protegida por JWT, Tenant e Throttler
@@ -41,6 +87,12 @@ export class AuthController {
     @Body() dto: ValidarGerenteDto,
   ) {
     return this.authService.validarGerente(dto, empresaId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @Get('modulos')
+  modulosAtivos(@Request() req: any) {
+    return this.authService.modulosDisponiveis(req.user.empresaId);
   }
 
   // Retorna a sessão do utilizador logado e os dados da empresa vinculada

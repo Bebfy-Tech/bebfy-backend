@@ -23,11 +23,12 @@ import { CreateProdutoDto } from './dto/create-produto.dto';
 import { UpdateProdutoDto } from './dto/update-produto.dto';
 import { JwtAuthGuard } from '../core/auth/jwt-auth.guard';
 import { TenantGuard } from '../common/guards/tenant.guard';
+import { ExigirPermissao, PermissoesGuard } from '../common/guards/permissoes.guard';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 
 @ApiTags('Catálogo & Produtos')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, TenantGuard, PermissoesGuard)
 @Controller('produtos')
 export class ProdutosController {
   constructor(private readonly produtosService: ProdutosService) {}
@@ -38,6 +39,7 @@ export class ProdutosController {
   })
   @ApiResponse({ status: 201, description: 'Produto criado com sucesso.' })
   @ApiResponse({ status: 400, description: 'Dados de entrada inválidos.' })
+  @ExigirPermissao('PRODUTOS_GERENCIAR')
   @Post()
   create(
     @CurrentTenant() empresaId: number,
@@ -107,6 +109,7 @@ export class ProdutosController {
   @ApiParam({ name: 'id', description: 'ID numérico do produto' })
   @ApiResponse({ status: 200, description: 'Produto atualizado com sucesso.' })
   @ApiResponse({ status: 404, description: 'Produto não encontrado.' })
+  @ExigirPermissao('PRODUTOS_GERENCIAR')
   @Patch(':id')
   update(
     @CurrentTenant() empresaId: number,
@@ -123,6 +126,7 @@ export class ProdutosController {
   @ApiParam({ name: 'id', description: 'ID numérico do produto' })
   @ApiResponse({ status: 200, description: 'Produto removido com sucesso.' })
   @ApiResponse({ status: 404, description: 'Produto não encontrado.' })
+  @ExigirPermissao('PRODUTOS_GERENCIAR')
   @Delete(':id')
   remove(
     @CurrentTenant() empresaId: number,

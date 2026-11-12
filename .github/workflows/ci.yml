@@ -2,33 +2,84 @@ name: Bebfy Backend CI
 
 on:
   push:
-    branches: [ main, refactor/backend-stabilization ]
+    branches: [main, refactor/backend-stabilization, refactor/codigo-chatgpt, refactor/codigo-chatgpt-2]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout do Código
+      - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Configurar Node.js (v20)
+      - name: Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
-
-      - name: Instalar Dependências
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install
         run: npm ci
-        working-directory: ./backend
-
-      - name: Validar Compilação (Build)
+      - name: Build
         run: npm run build
-        working-directory: ./backend
-
-      - name: Executar Testes E2E
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test
+      - name: E2E tests
+        env:
+          JWT_SECRET: ci-test-only-not-a-production-secret-at-least-32-characters
         run: npm run test:e2e
-        working-directory: ./backend
+
+  database-migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bebfy_test
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: bebfy_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bebfy_test -d bebfy_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://bebfy_test:test-only-password@localhost:5432/bebfy_test?schema=public
+      JWT_SECRET: ci-test-only-not-a-production-secret-at-least-32-characters
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate Prisma schema
+        run: npx prisma validate
+      - name: Apply all migrations on clean PostgreSQL
+        run: npx prisma migrate deploy
+      - name: Build NestJS with runtime decorator metadata
+        run: npm run build
+      - name: PostgreSQL multi-tenant and concurrent sales integration tests
+        run: npm run test:integration
+      - name: Audit stored password hashes without exposing credentials
+        run: npm run security:audit-passwords
+      - name: Create idempotent demo company in disposable PostgreSQL
+        env:
+          NODE_ENV: development
+          BEBFY_ALLOW_TEST_COMPANY: 'true'
+          BEBFY_TEST_CNPJ: '00000000000999'
+          BEBFY_TEST_OWNER_CPF: '11122233344'
+          BEBFY_TEST_OWNER_EMAIL: qa@bebfy.invalid
+          BEBFY_TEST_OWNER_PASSWORD: ci-only-example-password-never-reuse
+          BEBFY_TEST_OWNER_NAME: Operador QA
+          BEBFY_TEST_PHONE: '62999999999'
+        run: |
+          npm run dev:create-test-company
+          npm run dev:create-test-company

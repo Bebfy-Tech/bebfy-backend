@@ -23,36 +23,33 @@ export class VasilhamesService {
       throw new NotFoundException('Produto ou vasilhame não encontrado.');
     }
 
-    let novoSaldoCascos = cliente.cascosEmPosse;
-
-    if (dto.tipo === 'EMPRESTIMO_SAIDA') {
-      novoSaldoCascos += dto.quantidade;
-    } else if (dto.tipo === 'DEVOLUCAO_ENTRADA') {
-      if (cliente.cascosEmPosse < dto.quantidade) {
-        throw new BadRequestException(
-          `O cliente possui apenas ${cliente.cascosEmPosse} vasilhame(s) em posse, não sendo possível devolver ${dto.quantidade}.`,
-        );
-      }
-      novoSaldoCascos -= dto.quantidade;
-    } else if (dto.tipo === 'QUEBRA_AVARIA') {
-      if (cliente.cascosEmPosse < dto.quantidade) {
-        throw new BadRequestException('Quantidade de quebra superior aos cascos em posse do cliente.');
-      }
-      novoSaldoCascos -= dto.quantidade;
+    if (!produto.retornavel) {
+      throw new BadRequestException('O produto informado não é retornável.');
     }
 
-    return await this.prisma.$transaction(async (tx) => {
-      await tx.cliente.update({
-        where: { id: cliente.id },
-        data: { cascosEmPosse: novoSaldoCascos },
+    const ehEmprestimo = dto.tipo === 'EMPRESTIMO_SAIDA';
+    const variacao = ehEmprestimo ? dto.quantidade : -dto.quantidade;
+
+    return this.prisma.$transaction(async (tx) => {
+      const atualizacao = await tx.cliente.updateMany({
+        where: {
+          id: cliente.id,
+          empresaId,
+          ativo: true,
+          ...(ehEmprestimo ? {} : { cascosEmPosse: { gte: dto.quantidade } }),
+        },
+        data: { cascosEmPosse: { increment: variacao } },
       });
+      if (atualizacao.count !== 1) {
+        throw new BadRequestException('Saldo insuficiente de vasilhames ou cliente indisponível.');
+      }
 
       const movimentacao = await tx.movimentacaoCasco.create({
         data: {
           empresaId,
           clienteId: dto.clienteId,
           produtoId: dto.produtoId,
-          quantidade: dto.quantidade,
+          quantidade: variacao,
           observacao: dto.observacao ? `${dto.tipo}: ${dto.observacao}` : dto.tipo,
         },
         include: {

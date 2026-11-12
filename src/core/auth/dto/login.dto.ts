@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, Matches } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
 
 export class LoginDto {
   @IsString({ message: 'O login deve ser um texto.' })
@@ -9,4 +9,8 @@ export class LoginDto {
   @IsString({ message: 'A senha deve ser um texto.' })
   @IsNotEmpty({ message: 'A senha é obrigatória.' })
   senha: string;
+
+  @IsOptional()
+  @IsBoolean()
+  assumirSessao?: boolean;
 }

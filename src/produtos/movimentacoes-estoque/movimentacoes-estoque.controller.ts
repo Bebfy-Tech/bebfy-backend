@@ -15,13 +15,14 @@ import {
 } from '@nestjs/swagger';
 import { MovimentacoesEstoqueService } from './movimentacoes-estoque.service';
 import { CreateMovimentacaoEstoqueDto } from './dto/create-movimentacao-estoque.dto';
+import { ExigirPermissao, PermissoesGuard } from '../../common/guards/permissoes.guard';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 
 @ApiTags('Estoque & Catálogo')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, TenantGuard, PermissoesGuard)
 @Controller('movimentacoes-estoque')
 export class MovimentacoesEstoqueController {
   constructor(
@@ -33,6 +34,7 @@ export class MovimentacoesEstoqueController {
     description: 'Registra manualmente uma entrada, saída, perda ou ajuste de inventário.',
   })
   @ApiResponse({ status: 201, description: 'Movimentação registrada com sucesso.' })
+  @ExigirPermissao('ESTOQUE_AJUSTAR')
   @Post()
   create(
     @CurrentTenant() empresaId: number,

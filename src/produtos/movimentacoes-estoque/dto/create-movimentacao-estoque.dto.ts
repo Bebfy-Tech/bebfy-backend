@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsString,
   IsEnum,
+  IsPositive,
 } from 'class-validator';
 import { TipoMovimentacaoEstoque } from '@prisma/client';
 
@@ -21,6 +22,7 @@ export class CreateMovimentacaoEstoqueDto {
   // Quantidade de itens movimentados
   @IsInt({ message: 'A quantidade deve ser um número inteiro.' })
   @IsNotEmpty({ message: 'A quantidade é obrigatória.' })
+  @IsPositive()
   quantidade: number;
 
   // Motivo / Justificativa da movimentação
