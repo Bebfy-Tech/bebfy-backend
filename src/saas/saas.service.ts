@@ -152,6 +152,9 @@ export class SaasService {
       const responsavel = await this.prisma.saasOperador.findFirst({ where: { id: dto.responsavelId, ativo: true } });
       if (!responsavel) throw new BadRequestException('Responsável não encontrado ou inativo.');
     }
+    if (dto.status === 'RESOLVIDO' && !(dto.solucao?.trim() || atual.solucao?.trim())) {
+      throw new BadRequestException('Informe a solução antes de resolver a ordem de serviço.');
+    }
     const comDev = dto.status === 'COM_DEV' ? true : dto.comDev !== undefined ? dto.comDev : atual.comDev;
     const status = dto.status ?? (comDev && atual.status === 'PENDENTE' ? 'COM_DEV' : atual.status);
     // Resolved/cancelled items no longer remain in a developer queue.
