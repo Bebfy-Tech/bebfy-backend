@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   UseGuards,
   Request,
@@ -14,6 +15,7 @@ import { LoginDto } from './dto/login.dto';
 import { ValidarGerenteDto } from './dto/validar-gerente.dto';
 import { AlterarSenhaPrimeiroAcessoDto } from './dto/alterar-senha-primeiro-acesso.dto';
 import { AlterarSenhaDto } from './dto/alterar-senha.dto';
+import { AtualizarMeuPerfilDto } from './dto/atualizar-meu-perfil.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
@@ -52,6 +54,12 @@ export class AuthController {
   @Post('logout')
   logout(@Request() req: any) {
     return this.authService.sair(req.user.id, req.user.sessaoId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @Patch('perfil')
+  atualizarMeuPerfil(@Request() req: any, @Body() dto: AtualizarMeuPerfilDto) {
+    return this.authService.atualizarMeuPerfil(req.user.id, req.user.empresaId, dto);
   }
 
   // Validação de senha de gerente no PDV protegida por JWT, Tenant e Throttler
