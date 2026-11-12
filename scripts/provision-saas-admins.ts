@@ -51,8 +51,8 @@ async function main() {
       continue;
     }
     const envName = 'SAAS_ADMIN_' + codigo + '_PASSWORD';
-    const senha = process.env[envName] || await promptHidden('Defina a senha do administrador ' + codigo + ' (mín. 12 caracteres): ');
-    if (senha.length < 12) throw new Error('A senha do administrador ' + codigo + ' deve ter pelo menos 12 caracteres.');
+    const senha = process.env[envName] || await promptHidden('Defina a senha do administrador ' + codigo + ': ');
+    if (!senha) throw new Error('A senha do administrador ' + codigo + ' não pode ser vazia.');
     const nome = process.env['SAAS_ADMIN_' + codigo + '_NAME'] || 'Administrador ' + codigo;
     await db.saasOperador.create({
       data: {
