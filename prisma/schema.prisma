@@ -199,6 +199,19 @@ model SaasMensalidadeGerada {
   @@map("saas_mensalidades_geradas")
 }
 
+model SaasAuditoria {
+  id          String   @id @default(uuid())
+  operadorId  String
+  metodo      String
+  rota        String
+  campos      String[] @default([])
+  recursoId   String?
+  criadoEm    DateTime @default(now())
+  @@index([criadoEm])
+  @@index([operadorId, criadoEm])
+  @@map("saas_auditoria")
+}
+
 model SaasChamado {
   id             String   @id @default(uuid())
   numero         Int      @unique @default(autoincrement())
