@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Patch, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { IsArray, IsBoolean, IsEmail, IsEnum, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import { IsArray, IsBoolean, IsNotEmpty, IsEmail, IsEnum, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { SaasCargo } from '@prisma/client';
 import { SaasAuthService } from './saas-auth.service';
@@ -13,14 +13,14 @@ class LoginSaasDto {
 class CriarOperadorDto {
   @Type(() => Number) @IsInt() @Min(1) codigo: number;
   @IsString() @MinLength(2) @MaxLength(120) nome: string;
-  @IsString() @MinLength(12) senha: string;
+  @IsString() @IsNotEmpty() senha: string;
   @IsEnum(SaasCargo) cargo: SaasCargo;
   @IsArray() @IsString({each: true}) permissoes: string[];
 }
 class EditarOperadorDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) codigo?: number;
   @IsOptional() @IsString() @MinLength(2) @MaxLength(120) nome?: string;
-  @IsOptional() @IsString() @MinLength(12) senha?: string;
+  @IsOptional() @IsString() @IsNotEmpty() senha?: string;
   @IsOptional() @IsArray() @IsString({each: true}) permissoes?: string[];
   @IsOptional() @IsBoolean() ativo?: boolean;
 }
@@ -28,7 +28,7 @@ class MeuPerfilSaasDto {
   @IsOptional() @IsEmail() email?: string;
   @IsOptional() @IsString() @MinLength(2) @MaxLength(120) nome?: string;
   @IsOptional() @IsString() senhaAtual?: string;
-  @IsOptional() @IsString() @MinLength(12) novaSenha?: string;
+  @IsOptional() @IsString() @IsNotEmpty() novaSenha?: string;
 }
 @Controller('saas/auth')
 export class SaasAuthController {
