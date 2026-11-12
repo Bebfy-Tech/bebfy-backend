@@ -20,7 +20,7 @@ class CriarOperadorDto {
 class EditarOperadorDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) codigo?: number;
   @IsOptional() @IsString() @MinLength(2) @MaxLength(120) nome?: string;
-  @IsOptional() @IsEmail() email?: string;
+  @IsOptional() @IsEmail() email?: string | null;
   @IsOptional() @IsString() @IsNotEmpty() senha?: string;
   @IsOptional() @IsArray() @IsString({each: true}) permissoes?: string[];
   @IsOptional() @IsBoolean() ativo?: boolean;
