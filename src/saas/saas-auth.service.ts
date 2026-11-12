@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import * as bcrypt from 'bcrypt';
 import { SaasCargo } from '@prisma/client';
 
-export const SAAS_PERMISSIONS = ['EMPRESAS', 'PLANOS', 'MODULOS', 'FUNCIONARIOS'] as const;
+export const SAAS_PERMISSIONS = ['EMPRESAS', 'PLANOS', 'MODULOS', 'FUNCIONARIOS', 'SUPORTE'] as const;
 export type SaasPermission = typeof SAAS_PERMISSIONS[number];
 
 @Injectable()
