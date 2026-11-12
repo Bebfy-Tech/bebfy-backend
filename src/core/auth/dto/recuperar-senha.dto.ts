@@ -1,4 +1,4 @@
-import { IsString, Matches, MinLength } from 'class-validator';
+import { IsString, Matches, IsNotEmpty } from 'class-validator';
 
 export class SolicitarRecuperacaoSenhaDto {
   @IsString()
@@ -9,7 +9,7 @@ export class ConfirmarRecuperacaoSenhaDto {
   @IsString()
   @Matches(/^[a-f0-9]{64}$/, { message: 'Token de recuperação inválido.' })
   token: string;
-  @IsString() @MinLength(10)
+  @IsString() @IsNotEmpty()
   novaSenha: string;
   @IsString()
   confirmarNovaSenha: string;
