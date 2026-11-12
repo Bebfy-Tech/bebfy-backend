@@ -58,6 +58,7 @@ model SaasOperador {
   id          String    @id @default(uuid())
   codigo      Int       @unique
   nome        String
+  email       String?   @unique
   senha       String
   cargo       SaasCargo @default(OPERADOR)
   permissoes  String[]  @default([])
