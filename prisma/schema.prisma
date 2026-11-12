@@ -84,6 +84,7 @@ model Empresa {
   cobrancasSaas       SaasCobranca[]
   eventosFinanceiros  SaasFinanceiroEvento[]
   anexosFinanceiros    SaasAnexoFinanceiro[]
+  chamadosSuporte     SaasChamado[]
   resetSenhaTokens     ResetSenhaToken[]
   planoId              Int?
   plano                Plano?                @relation(fields: [planoId], references: [id])
@@ -172,6 +173,44 @@ model SaasAnexoFinanceiro {
   criadoEm    DateTime @default(now())
   @@index([empresaId, criadoEm])
   @@map("saas_anexos_financeiros")
+}
+
+model SaasChamado {
+  id             String   @id @default(uuid())
+  numero         Int      @unique @default(autoincrement())
+  empresaId      Int
+  empresa        Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  titulo         String
+  descricao      String   @db.Text
+  contatoNome    String?
+  contatoTelefone String?
+  categoria      String   @default("DUVIDA")
+  prioridade     String   @default("NORMAL")
+  status         String   @default("PENDENTE")
+  comDev         Boolean  @default(false)
+  responsavelId  String?
+  devResponsavel String?
+  solucao        String?  @db.Text
+  abertoPorId    String
+  resolvidoEm    DateTime?
+  criadoEm       DateTime @default(now())
+  atualizadoEm   DateTime @updatedAt
+  eventos        SaasChamadoEvento[]
+  @@index([empresaId, criadoEm])
+  @@index([status, prioridade, atualizadoEm])
+  @@map("saas_chamados")
+}
+
+model SaasChamadoEvento {
+  id          String      @id @default(uuid())
+  chamadoId   String
+  chamado     SaasChamado @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+  operadorId  String
+  acao        String
+  mensagem    String      @db.Text
+  criadoEm    DateTime    @default(now())
+  @@index([chamadoId, criadoEm])
+  @@map("saas_chamado_eventos")
 }
 
 model SaasFinanceiroEvento {
