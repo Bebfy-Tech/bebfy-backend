@@ -85,6 +85,8 @@ model Empresa {
   eventosFinanceiros  SaasFinanceiroEvento[]
   anexosFinanceiros    SaasAnexoFinanceiro[]
   chamadosSuporte     SaasChamado[]
+  configuracaoCobrancaSaas SaasConfiguracaoCobranca?
+  mensalidadesGeradasSaas SaasMensalidadeGerada[]
   resetSenhaTokens     ResetSenhaToken[]
   planoId              Int?
   plano                Plano?                @relation(fields: [planoId], references: [id])
@@ -139,6 +141,7 @@ model SaasCobranca {
   criadoEm      DateTime @default(now())
   pagamentos    SaasPagamento[]
   anexos        SaasAnexoFinanceiro[]
+  mensalidadeGerada SaasMensalidadeGerada?
 
   @@index([empresaId, vencimento])
   @@map("saas_cobrancas")
@@ -173,6 +176,27 @@ model SaasAnexoFinanceiro {
   criadoEm    DateTime @default(now())
   @@index([empresaId, criadoEm])
   @@map("saas_anexos_financeiros")
+}
+
+model SaasConfiguracaoCobranca {
+  empresaId       Int      @id
+  empresa         Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  recorrente      Boolean  @default(false)
+  diaVencimento   Int      @default(15)
+  atualizadoEm    DateTime @updatedAt
+  @@map("saas_configuracao_cobranca")
+}
+
+model SaasMensalidadeGerada {
+  id           String     @id @default(uuid())
+  empresaId    Int
+  empresa      Empresa    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  competencia  String
+  cobrancaId   String     @unique
+  cobranca     SaasCobranca @relation(fields: [cobrancaId], references: [id], onDelete: Cascade)
+  criadoEm     DateTime   @default(now())
+  @@unique([empresaId, competencia])
+  @@map("saas_mensalidades_geradas")
 }
 
 model SaasChamado {
