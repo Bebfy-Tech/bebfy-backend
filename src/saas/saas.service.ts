@@ -100,6 +100,20 @@ export class SaasService {
     });
   }
 
+  async listarEmpresasSuporte() {
+    return this.prisma.empresa.findMany({
+      select: { id: true, nomeFantasia: true, slug: true, status: true },
+      orderBy: { nomeFantasia: 'asc' },
+    });
+  }
+
+  async listarOperadoresSuporte() {
+    return this.prisma.saasOperador.findMany({
+      where: { ativo: true }, select: { id: true, nome: true, codigo: true },
+      orderBy: { nome: 'asc' },
+    });
+  }
+
   async listarChamados() {
     return this.prisma.saasChamado.findMany({
       include: { empresa: { select: { id: true, nomeFantasia: true, slug: true } },
