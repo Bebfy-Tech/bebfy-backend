@@ -6,6 +6,7 @@ import {
   Param,
   Body,
   ParseIntPipe,
+  Query,
   UseGuards,
   Req,
   Res,
@@ -195,6 +196,12 @@ export class SaasController {
   @Get('empresas')
   listarEmpresas() {
     return this.saasService.listarEmpresas();
+  }
+
+  @UseGuards(SaasPermissionGuard('EMPRESAS'))
+  @Get('empresas/verificar-endereco')
+  verificarEnderecoEmpresa(@Query('subdominio') subdominio: string) {
+    return this.saasService.verificarEnderecoEmpresa(subdominio || '');
   }
 
   @UseGuards(SaasPermissionGuard('EMPRESAS'))
