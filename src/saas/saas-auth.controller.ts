@@ -37,8 +37,8 @@ export class SaasAuthController {
   entrar(@Body() dto: LoginSaasDto) { return this.service.login(dto.codigo, dto.senha); }
   @Get('perfil') @UseGuards(SaasAuthGuard)
   perfil(@Req() req: any) {
-    const { id, codigo, nome, cargo, permissoes, ativo } = req.saasUser;
-    return { id, codigo, nome, cargo, permissoes, ativo };
+    const { id, codigo, nome, email, cargo, permissoes, ativo } = req.saasUser;
+    return { id, codigo, nome, email, cargo, permissoes, ativo };
   }
   @Patch('perfil') @UseGuards(SaasAuthGuard)
   atualizarPerfil(@Req() req: any, @Body() dto: MeuPerfilSaasDto) {
