@@ -22,7 +22,6 @@ class EditarOperadorDto {
   @IsOptional() @IsString() @MinLength(2) @MaxLength(120) nome?: string;
   @IsOptional() @IsEmail() email?: string;
   @IsOptional() @IsString() @IsNotEmpty() senha?: string;
-  @IsOptional() @IsString() senhaAtualAdmin?: string;
   @IsOptional() @IsArray() @IsString({each: true}) permissoes?: string[];
   @IsOptional() @IsBoolean() ativo?: boolean;
 }
