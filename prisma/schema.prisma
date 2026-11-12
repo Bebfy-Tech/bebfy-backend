@@ -82,6 +82,7 @@ model Empresa {
   liberacaoFinanceiraAte DateTime?
   historicoLiberacoes  SaasLiberacaoAcesso[]
   cobrancasSaas       SaasCobranca[]
+  resetSenhaTokens     ResetSenhaToken[]
   planoId              Int?
   plano                Plano?                @relation(fields: [planoId], references: [id])
   criadoEm             DateTime              @default(now())
@@ -105,6 +106,21 @@ model Empresa {
   logsAuditoria        LogAuditoria[]
 
   @@map("empresas")
+}
+
+model ResetSenhaToken {
+  id        String   @id @default(uuid())
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  empresaId Int
+  empresa   Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiraEm  DateTime
+  usadoEm   DateTime?
+  criadoEm  DateTime @default(now())
+
+  @@index([usuarioId, expiraEm])
+  @@map("reset_senha_tokens")
 }
 
 model SaasCobranca {
@@ -213,6 +229,7 @@ model Usuario {
   ativo         Boolean     @default(true)
   funcionarioId String      @unique
   funcionario   Funcionario @relation(fields: [funcionarioId], references: [id], onDelete: Cascade)
+  resetSenhaTokens ResetSenhaToken[]
   permissoes    String[]
   primeiroAcesso Boolean @default(false)
   sessaoId      String?
