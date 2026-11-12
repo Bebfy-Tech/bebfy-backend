@@ -72,7 +72,7 @@ export class SaasAuthService {
       data: {
         ...(input.nome !== undefined ? { nome: input.nome.trim() } : {}),
         ...(input.email !== undefined ? { email: input.email.trim().toLowerCase() } : {}),
-        ...(input.novaSenha ? { senha: await bcrypt.hash(input.novaSenha, 12) } : {}),
+        ...(input.novaSenha ? { senha: await bcrypt.hash(input.novaSenha, 12), sessaoId: null } : {}),
       },
     });
     return this.publicUser(atualizado);
