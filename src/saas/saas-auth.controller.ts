@@ -20,7 +20,9 @@ class CriarOperadorDto {
 class EditarOperadorDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) codigo?: number;
   @IsOptional() @IsString() @MinLength(2) @MaxLength(120) nome?: string;
+  @IsOptional() @IsEmail() email?: string;
   @IsOptional() @IsString() @IsNotEmpty() senha?: string;
+  @IsOptional() @IsString() senhaAtualAdmin?: string;
   @IsOptional() @IsArray() @IsString({each: true}) permissoes?: string[];
   @IsOptional() @IsBoolean() ativo?: boolean;
 }
@@ -53,5 +55,5 @@ export class SaasStaffController {
   constructor(private readonly service: SaasAuthService) {}
   @Get() listar() { return this.service.listar(); }
   @Post() criar(@Body() dto: CriarOperadorDto) { return this.service.criar(dto); }
-  @Patch(':id') editar(@Param('id') id: string, @Body() dto: EditarOperadorDto) { return this.service.atualizar(id, dto); }
+  @Patch(':id') editar(@Param('id') id: string, @Req() req: any, @Body() dto: EditarOperadorDto) { return this.service.atualizar(id, dto, req.saasUser.id); }
 }
