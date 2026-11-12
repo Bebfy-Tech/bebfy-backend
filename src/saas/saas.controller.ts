@@ -8,9 +8,15 @@ import {
   ParseIntPipe,
   UseGuards,
   Req,
+  Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { DefinirInadimplenciaDto, LiberarAcessoTemporarioDto } from './dto/liberacao-financeira.dto';
 import { SaasService } from './saas.service';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
+import { AnexoFinanceiroDto } from './dto/anexo-financeiro.dto';
 import { SaasAuthGuard, SaasPermissionGuard } from './saas-auth.guard';
 import { AlterarStatusEmpresaDto } from './dto/alterar-status-empresa.dto';
 import { AlternarModuloDto } from './dto/alternar-modulo.dto';
@@ -48,6 +54,39 @@ export class SaasController {
     @Body() dto: RegistrarPagamentoSaasDto,
   ) {
     return this.saasService.registrarPagamento(id, cobrancaId, req.saasUser.id, dto);
+  }
+
+  @UseGuards(SaasPermissionGuard('EMPRESAS'))
+  @Get('financeiro/empresas/:id/anexos')
+  listarAnexosFinanceiros(@Param('id', ParseIntPipe) id: number) {
+    return this.saasService.listarAnexosFinanceiros(id);
+  }
+
+  @UseGuards(SaasPermissionGuard('EMPRESAS'))
+  @UseInterceptors(FileInterceptor('arquivo', { limits: { fileSize: 2 * 1024 * 1024, files: 1 } }))
+  @Post('financeiro/empresas/:id/anexos')
+  anexarFinanceiro(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+    @Body() dto: AnexoFinanceiroDto,
+    @UploadedFile() arquivo: any,
+  ) {
+    return this.saasService.anexarFinanceiro(id, req.saasUser.id, dto, arquivo);
+  }
+
+  @UseGuards(SaasPermissionGuard('EMPRESAS'))
+  @Get('financeiro/empresas/:id/anexos/:anexoId')
+  async baixarAnexoFinanceiro(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('anexoId') anexoId: string,
+    @Res() response: Response,
+  ) {
+    const file = await this.saasService.baixarAnexoFinanceiro(id, anexoId);
+    response.setHeader('Content-Type', file.mime);
+    response.setHeader('Content-Disposition', 'attachment; filename="documento-' + file.id + (file.mime === 'application/pdf' ? '.pdf' : file.mime === 'image/png' ? '.png' : '.jpg') + '"');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setHeader('Cache-Control', 'no-store');
+    response.end(Buffer.from(file.conteudo));
   }
 
   // NOVO: Rota POST para incluir uma nova empresa cliente no SaaS
