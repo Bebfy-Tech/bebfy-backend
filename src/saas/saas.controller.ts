@@ -131,8 +131,8 @@ export class SaasController {
 
   @UseGuards(SaasPermissionGuard('EMPRESAS'))
   @Post('empresas/:id/cobrancas')
-  criarCobranca(@Param('id', ParseIntPipe) id: number, @Body() dto: CriarCobrancaSaasDto) {
-    return this.saasService.criarCobranca(id, dto);
+  criarCobranca(@Param('id', ParseIntPipe) id: number, @Req() req: any, @Body() dto: CriarCobrancaSaasDto) {
+    return this.saasService.criarCobranca(id, dto, req.saasUser.id);
   }
 
   @UseGuards(SaasPermissionGuard('EMPRESAS'))
