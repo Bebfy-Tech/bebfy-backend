@@ -1,9 +1,10 @@
-import { Body, Controller, Get, HttpCode, Patch, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Patch, Param, Post, Req, UseGuards, UseInterceptors } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { IsArray, IsBoolean, IsNotEmpty, IsEmail, IsEnum, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { SaasCargo } from '@prisma/client';
 import { SaasAuthService } from './saas-auth.service';
+import { SaasAuditInterceptor } from './saas-audit.interceptor';
 import { SaasAuthGuard, SaasPermissionGuard } from './saas-auth.guard';
 
 class LoginSaasDto {
@@ -41,7 +42,7 @@ export class SaasAuthController {
     const { id, codigo, nome, email, cargo, permissoes, ativo } = req.saasUser;
     return { id, codigo, nome, email, cargo, permissoes, ativo };
   }
-  @Patch('perfil') @UseGuards(SaasAuthGuard)
+  @Patch('perfil') @UseGuards(SaasAuthGuard) @UseInterceptors(SaasAuditInterceptor)
   atualizarPerfil(@Req() req: any, @Body() dto: MeuPerfilSaasDto) {
     return this.service.atualizarPerfil(req.saasUser.id, dto);
   }
@@ -49,6 +50,7 @@ export class SaasAuthController {
   sair(@Req() req: any) { return this.service.sair(req.saasUser.id, req.saasUser.sessaoId); }
 }
 @Controller('saas/admin/funcionarios')
+@UseInterceptors(SaasAuditInterceptor)
 @UseGuards(SaasAuthGuard, SaasPermissionGuard('FUNCIONARIOS'))
 export class SaasStaffController {
   constructor(private readonly service: SaasAuthService) {}
