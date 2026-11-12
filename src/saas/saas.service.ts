@@ -320,6 +320,69 @@ export class SaasService {
     });
   }
 
+  async configurarRecorrencia(empresaId: number, operadorId: string, recorrente: boolean, diaVencimento: number) {
+    await this.buscarEmpresaPorId(empresaId);
+    return this.prisma.$transaction(async tx => {
+      const config = await tx.saasConfiguracaoCobranca.upsert({
+        where: { empresaId },
+        create: { empresaId, recorrente, diaVencimento },
+        update: { recorrente, diaVencimento },
+      });
+      await tx.saasFinanceiroEvento.create({
+        data: { empresaId, operadorId, acao: 'RECORRENCIA_CONFIGURADA',
+          descricao: (recorrente ? 'Ativada' : 'Desativada') + ' a preparação mensal, com vencimento no dia ' + diaVencimento },
+      });
+      return config;
+    });
+  }
+
+  async gerarMensalidades(competencia: string, operadorId: string) {
+    const [year, month] = competencia.split('-').map(Number);
+    if (!Number.isInteger(year) || year < 2020 || year > 2099 || !Number.isInteger(month) || month < 1 || month > 12) {
+      throw new BadRequestException('Competência inválida. Use AAAA-MM.');
+    }
+    const empresas = await this.prisma.empresa.findMany({
+      where: { status: 'ATIVA', configuracaoCobrancaSaas: { is: { recorrente: true } } },
+      include: { plano: true, configuracaoCobrancaSaas: true },
+    });
+    let geradas = 0, ignoradas = 0;
+    for (const empresa of empresas) {
+      const preco = Number(empresa.plano?.precoMensal ?? 0);
+      if (!Number.isFinite(preco) || preco <= 0) { ignoradas++; continue; }
+      const dia = empresa.configuracaoCobrancaSaas?.diaVencimento ?? 15;
+      const vencimento = new Date(Date.UTC(year, month - 1, dia, 12));
+      try {
+        const existing = await this.prisma.saasMensalidadeGerada.findUnique({
+          where: { empresaId_competencia: { empresaId: empresa.id, competencia } },
+        });
+        if (existing) { ignoradas++; continue; }
+        await this.prisma.$transaction(async tx => {
+          const charge = await tx.saasCobranca.create({
+            data: {
+              empresaId: empresa.id,
+              referencia: 'Mensalidade ' + competencia,
+              valor: preco,
+              vencimento,
+              observacao: 'Lançamento mensal gerado pelo controle administrativo. Boleto bancário não emitido.',
+            },
+          });
+          await tx.saasMensalidadeGerada.create({
+            data: { empresaId: empresa.id, competencia, cobrancaId: charge.id },
+          });
+          await tx.saasFinanceiroEvento.create({
+            data: { empresaId: empresa.id, operadorId, acao: 'MENSALIDADE_GERADA',
+              descricao: 'Mensalidade ' + competencia + ': R$ ' + preco.toFixed(2) + ', vencimento dia ' + dia },
+          });
+        });
+        geradas++;
+      } catch (e) {
+        if ((e as {code?:string})?.code === 'P2002') { ignoradas++; continue; }
+        throw e;
+      }
+    }
+    return { competencia, geradas, ignoradas, elegiveis: empresas.length };
+  }
+
   // Consolidated data for the SaaS administrative finance center. All access is
   // guarded by EMPRESAS in the controller; no tenant can call these endpoints.
   async listarFinanceiro() {
@@ -327,6 +390,7 @@ export class SaasService {
       this.prisma.empresa.findMany({
         select: { id: true, nomeFantasia: true, slug: true, status: true,
           inadimplente: true, liberacaoFinanceiraAte: true,
+          configuracaoCobrancaSaas: true,
           plano: { select: { nome: true, precoMensal: true } } },
         orderBy: { nomeFantasia: 'asc' },
       }),
