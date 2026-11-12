@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Patch, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { IsArray, IsBoolean, IsEnum, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import { IsArray, IsBoolean, IsEmail, IsEnum, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { SaasCargo } from '@prisma/client';
 import { SaasAuthService } from './saas-auth.service';
@@ -25,6 +25,7 @@ class EditarOperadorDto {
   @IsOptional() @IsBoolean() ativo?: boolean;
 }
 class MeuPerfilSaasDto {
+  @IsOptional() @IsEmail() email?: string;
   @IsOptional() @IsString() @MinLength(2) @MaxLength(120) nome?: string;
   @IsOptional() @IsString() senhaAtual?: string;
   @IsOptional() @IsString() @MinLength(12) novaSenha?: string;
