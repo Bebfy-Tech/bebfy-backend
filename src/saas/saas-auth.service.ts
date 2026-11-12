@@ -12,8 +12,8 @@ export type SaasPermission = typeof SAAS_PERMISSIONS[number];
 export class SaasAuthService {
   constructor(private readonly prisma: PrismaService, private readonly jwt: JwtService) {}
 
-  private publicUser(user: { id: string; codigo: number; nome: string; cargo: SaasCargo; permissoes: string[]; ativo: boolean }) {
-    return { id: user.id, codigo: user.codigo, nome: user.nome, cargo: user.cargo, permissoes: user.permissoes, ativo: user.ativo };
+  private publicUser(user: { id: string; codigo: number; nome: string; email?: string | null; cargo: SaasCargo; permissoes: string[]; ativo: boolean }) {
+    return { id: user.id, codigo: user.codigo, nome: user.nome, email: user.email, cargo: user.cargo, permissoes: user.permissoes, ativo: user.ativo };
   }
 
   async login(codigo: number, senha: string) {
@@ -36,7 +36,7 @@ export class SaasAuthService {
 
   async listar() {
     const users = await this.prisma.saasOperador.findMany({
-      select: { id: true, codigo: true, nome: true, cargo: true, permissoes: true, ativo: true, criadoEm: true },
+      select: { id: true, codigo: true, nome: true, cargo: true, permissoes: true, ativo: true, email: true, criadoEm: true },
       orderBy: { codigo: 'asc' },
     });
     return users;
@@ -57,7 +57,7 @@ export class SaasAuthService {
     return this.publicUser(user);
   }
 
-  async atualizarPerfil(id: string, input: { nome?: string; senhaAtual?: string; novaSenha?: string }) {
+  async atualizarPerfil(id: string, input: { nome?: string; email?: string; senhaAtual?: string; novaSenha?: string }) {
     const existente = await this.prisma.saasOperador.findUnique({ where: { id } });
     if (!existente?.ativo) throw new UnauthorizedException('Sessão inválida.');
     if (input.novaSenha && (!input.senhaAtual || !await bcrypt.compare(input.senhaAtual, existente.senha))) {
@@ -66,11 +66,12 @@ export class SaasAuthService {
     if (input.novaSenha && input.novaSenha.length < 12) {
       throw new BadRequestException('A nova senha deve conter pelo menos 12 caracteres.');
     }
-    if (!input.nome && !input.novaSenha) throw new BadRequestException('Nenhuma alteração informada.');
+    if (!input.nome && input.email === undefined && !input.novaSenha) throw new BadRequestException('Nenhuma alteração informada.');
     const atualizado = await this.prisma.saasOperador.update({
       where: { id },
       data: {
         ...(input.nome !== undefined ? { nome: input.nome.trim() } : {}),
+        ...(input.email !== undefined ? { email: input.email.trim().toLowerCase() } : {}),
         ...(input.novaSenha ? { senha: await bcrypt.hash(input.novaSenha, 12) } : {}),
       },
     });
