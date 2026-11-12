@@ -19,6 +19,16 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
+  async modulosDisponiveis(empresaId: number) {
+    const configuracoes = await this.prisma.empresaModulo.findMany({
+      where: { empresaId },
+      select: { modulo: true, ativo: true },
+    });
+    // Same rule as ModuloAtivoGuard: legacy unconfigured modules stay enabled,
+    // while every explicit false removes navigation and rejects the protected API.
+    return { modulos: Object.fromEntries(configuracoes.map(m => [m.modulo, m.ativo])) };
+  }
+
   private responder(usuario: any, sessaoId: string) {
     const empresa = usuario.funcionario.empresa;
     return {
