@@ -68,6 +68,7 @@ export class VendasController {
     description: 'Retorna vendas marcadas como delivery aguardando acerto de contas pelo entregador.',
   })
   @ApiResponse({ status: 200, description: 'Vendas pendentes de delivery retornadas.' })
+  @ExigirModulo('ENTREGAS_DELIVERY')
   @Get('pendentes-acerto-delivery')
   async listarPendentesAcertoDelivery(@CurrentTenant() empresaId: number) {
     return this.vendasService.listarPendentesAcertoDelivery(empresaId);
@@ -78,6 +79,7 @@ export class VendasController {
     description: 'Atualiza o status de acerto de uma lista de vendas para CONCLUIDO.',
   })
   @ApiResponse({ status: 200, description: 'Acerto de delivery confirmado.' })
+  @ExigirModulo('ENTREGAS_DELIVERY')
   @ExigirPermissao('DELIVERY_ACERTAR')
   @Post('confirmar-acerto-delivery')
   @HttpCode(HttpStatus.OK)
