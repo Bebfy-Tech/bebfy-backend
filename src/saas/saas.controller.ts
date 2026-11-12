@@ -15,6 +15,7 @@ import { SaasAuthGuard, SaasPermissionGuard } from './saas-auth.guard';
 import { AlterarStatusEmpresaDto } from './dto/alterar-status-empresa.dto';
 import { AlternarModuloDto } from './dto/alternar-modulo.dto';
 import { CriarCobrancaSaasDto, MarcarPagamentoSaasDto } from './dto/cobranca-saas.dto';
+import { RegistrarPagamentoSaasDto } from './dto/registrar-pagamento-saas.dto';
 import { PersonalizarModuloDto } from './dto/personalizar-modulo.dto';
 import { AlterarPlanoDto } from './dto/alterar-plano.dto';
 import { CriarEmpresaDto } from './dto/criar-empresa.dto';
@@ -25,6 +26,29 @@ import { CriarPlanoDto, AtualizarPlanoDto } from './dto/criar-plano.dto';
 @Controller('saas/admin')
 export class SaasController {
   constructor(private readonly saasService: SaasService) {}
+
+  @UseGuards(SaasPermissionGuard('EMPRESAS'))
+  @Get('financeiro')
+  listarFinanceiro() {
+    return this.saasService.listarFinanceiro();
+  }
+
+  @UseGuards(SaasPermissionGuard('EMPRESAS'))
+  @Get('financeiro/empresas/:id/historico')
+  historicoFinanceiro(@Param('id', ParseIntPipe) id: number) {
+    return this.saasService.historicoFinanceiro(id);
+  }
+
+  @UseGuards(SaasPermissionGuard('EMPRESAS'))
+  @Post('financeiro/empresas/:id/cobrancas/:cobrancaId/pagamentos')
+  registrarPagamento(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('cobrancaId') cobrancaId: string,
+    @Req() req: any,
+    @Body() dto: RegistrarPagamentoSaasDto,
+  ) {
+    return this.saasService.registrarPagamento(id, cobrancaId, req.saasUser.id, dto);
+  }
 
   // NOVO: Rota POST para incluir uma nova empresa cliente no SaaS
   @UseGuards(SaasPermissionGuard('EMPRESAS'))
