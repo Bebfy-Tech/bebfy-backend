@@ -182,6 +182,16 @@ describe('SaaS: administradores independentes das distribuidoras', () => {
     const message=await request(server).post(path+'/interacoes').set(token)
       .send({mensagem:'Solicitamos evidências pelo WhatsApp e encaminhamos ao Dev.'});
     expect(message.status).toBe(201);
+    const image=await request(server).post(path+'/anexos').set(token)
+      .attach('arquivo',Buffer.from([255,216,255,217]),'print-qa.jpg');
+    expect(image.status).toBe(201);
+    const attachments=await request(server).get(path+'/anexos').set(token);
+    expect(attachments.status).toBe(200);
+    expect(attachments.body.some((a:{id:string})=>a.id===image.body.id)).toBe(true);
+    const downloaded=await request(server).get(path+'/anexos/'+image.body.id).set(token);
+    expect(downloaded.status).toBe(200);
+    expect(downloaded.headers['content-type']).toContain('image/jpeg');
+    expect((await request(server).get(path+'/anexos/'+image.body.id)).status).toBe(401);
     const active=await request(server).get(path).set(token);
     expect(active.status).toBe(200);
     expect(active.body.eventos.map((x:{acao:string})=>x.acao)).toContain('INTERACAO_WHATSAPP');
