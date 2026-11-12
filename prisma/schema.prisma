@@ -220,9 +220,24 @@ model SaasChamado {
   criadoEm       DateTime @default(now())
   atualizadoEm   DateTime @updatedAt
   eventos        SaasChamadoEvento[]
+  anexos         SaasChamadoAnexo[]
   @@index([empresaId, criadoEm])
   @@index([status, prioridade, atualizadoEm])
   @@map("saas_chamados")
+}
+
+model SaasChamadoAnexo {
+  id          String    @id @default(uuid())
+  chamadoId   String
+  chamado     SaasChamado @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+  nome        String
+  mime        String
+  tamanho     Int
+  conteudo    Bytes     @db.ByteA
+  operadorId  String
+  criadoEm    DateTime  @default(now())
+  @@index([chamadoId, criadoEm])
+  @@map("saas_chamado_anexos")
 }
 
 model SaasChamadoEvento {
