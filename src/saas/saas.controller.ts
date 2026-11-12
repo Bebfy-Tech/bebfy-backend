@@ -60,6 +60,31 @@ export class SaasController {
   }
 
   @UseGuards(SaasPermissionGuard('SUPORTE'))
+  @Get('suporte/chamados/:id/anexos')
+  listarAnexosChamado(@Param('id') id: string) {
+    return this.saasService.listarAnexosChamado(id);
+  }
+
+  @UseGuards(SaasPermissionGuard('SUPORTE'))
+  @UseInterceptors(FileInterceptor('arquivo', { limits: { fileSize: 3 * 1024 * 1024, files: 1 } }))
+  @Post('suporte/chamados/:id/anexos')
+  anexarChamado(@Param('id') id: string, @Req() req: any, @UploadedFile() arquivo: any) {
+    return this.saasService.anexarChamado(id, req.saasUser.id, arquivo);
+  }
+
+  @UseGuards(SaasPermissionGuard('SUPORTE'))
+  @Get('suporte/chamados/:id/anexos/:anexoId')
+  async baixarAnexoChamado(@Param('id') id: string, @Param('anexoId') anexoId: string, @Res() response: Response) {
+    const anexo = await this.saasService.baixarAnexoChamado(id, anexoId);
+    const extension = anexo.mime === 'application/pdf' ? '.pdf' : anexo.mime === 'image/png' ? '.png' : '.jpg';
+    response.setHeader('Content-Type', anexo.mime);
+    response.setHeader('Content-Disposition', 'attachment; filename="suporte-' + anexo.id + extension + '"');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setHeader('Cache-Control', 'no-store');
+    response.end(Buffer.from(anexo.conteudo));
+  }
+
+  @UseGuards(SaasPermissionGuard('SUPORTE'))
   @Get('suporte/chamados/:id')
   buscarChamado(@Param('id') id: string) {
     return this.saasService.buscarChamado(id);
