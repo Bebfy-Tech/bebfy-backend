@@ -9,6 +9,7 @@ import { LoginDto } from './dto/login.dto';
 import { ValidarGerenteDto } from './dto/validar-gerente.dto';
 import { AlterarSenhaPrimeiroAcessoDto } from './dto/alterar-senha-primeiro-acesso.dto';
 import { AlterarSenhaDto } from './dto/alterar-senha.dto';
+import { AtualizarMeuPerfilDto } from './dto/atualizar-meu-perfil.dto';
 
 @Injectable()
 export class AuthService {
@@ -162,6 +163,34 @@ export class AuthService {
     });
     if (!result.count) throw new ConflictException('Senha ou sessão alterada em outro acesso.');
     return { alterada: true, mensagem: 'Senha alterada. Faça login novamente.' };
+  }
+
+  async atualizarMeuPerfil(usuarioId: string, empresaId: number, dto: AtualizarMeuPerfilDto) {
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      include: { funcionario: true },
+    });
+    if (!usuario?.ativo || !usuario.funcionario.ativo ||
+        usuario.funcionario.empresaId !== empresaId) throw new UnauthorizedException('Usuário não autorizado.');
+    if (dto.email && dto.email.toLowerCase() !== usuario.email) {
+      const exists = await this.prisma.usuario.findUnique({ where: { email: dto.email.toLowerCase() } });
+      if (exists) throw new ConflictException('E-mail já cadastrado.');
+    }
+    await this.prisma.$transaction(async tx => {
+      if (dto.email !== undefined) {
+        await tx.usuario.update({ where: { id: usuarioId },
+          data: { email: dto.email.trim().toLowerCase() } });
+      }
+      if (dto.nome !== undefined || dto.telefone !== undefined) {
+        await tx.funcionario.update({ where: { id: usuario.funcionarioId },
+          data: {
+            ...(dto.nome !== undefined ? { nome: dto.nome.trim() } : {}),
+            ...(dto.telefone !== undefined ? { telefone: dto.telefone } : {}),
+          },
+        });
+      }
+    });
+    return { atualizado: true };
   }
 
   async sair(usuarioId: string, sessaoId: string) {
