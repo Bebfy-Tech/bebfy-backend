@@ -57,7 +57,27 @@ export class SaasAuthService {
     return this.publicUser(user);
   }
 
-  async atualizar(id: string, input: { nome?: string; senha?: string; permissoes?: string[]; ativo?: boolean }) {
+  async atualizarPerfil(id: string, input: { nome?: string; senhaAtual?: string; novaSenha?: string }) {
+    const existente = await this.prisma.saasOperador.findUnique({ where: { id } });
+    if (!existente?.ativo) throw new UnauthorizedException('Sessão inválida.');
+    if (input.novaSenha && (!input.senhaAtual || !await bcrypt.compare(input.senhaAtual, existente.senha))) {
+      throw new UnauthorizedException('Senha atual incorreta.');
+    }
+    if (input.novaSenha && input.novaSenha.length < 12) {
+      throw new BadRequestException('A nova senha deve conter pelo menos 12 caracteres.');
+    }
+    if (!input.nome && !input.novaSenha) throw new BadRequestException('Nenhuma alteração informada.');
+    const atualizado = await this.prisma.saasOperador.update({
+      where: { id },
+      data: {
+        ...(input.nome !== undefined ? { nome: input.nome.trim() } : {}),
+        ...(input.novaSenha ? { senha: await bcrypt.hash(input.novaSenha, 12) } : {}),
+      },
+    });
+    return this.publicUser(atualizado);
+  }
+
+  async atualizar(id: string, input: { codigo?: number; nome?: string; senha?: string; permissoes?: string[]; ativo?: boolean }) {
     const existing = await this.prisma.saasOperador.findUnique({ where: { id } });
     if (!existing) throw new BadRequestException('Funcionário não encontrado.');
     if (existing.cargo === SaasCargo.SUPER_ADMIN) throw new ForbiddenException('Superadministradores são geridos somente por provisionamento seguro.');
@@ -67,6 +87,7 @@ export class SaasAuthService {
       where: { id },
       data: {
         ...(input.nome !== undefined ? { nome: input.nome.trim() } : {}),
+        ...(input.codigo !== undefined ? { codigo: input.codigo } : {}),
         ...(input.permissoes !== undefined ? { permissoes: input.permissoes } : {}),
         ...(input.ativo !== undefined ? { ativo: input.ativo, sessaoId: null } : {}),
         ...(input.senha ? { senha: await bcrypt.hash(input.senha, 12), sessaoId: null } : {}),
