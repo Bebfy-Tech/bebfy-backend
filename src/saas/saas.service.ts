@@ -5,6 +5,7 @@ import { CriarEmpresaDto } from './dto/criar-empresa.dto';
 import { CriarCobrancaSaasDto } from './dto/cobranca-saas.dto';
 import { RegistrarPagamentoSaasDto } from './dto/registrar-pagamento-saas.dto';
 import { AnexoFinanceiroDto } from './dto/anexo-financeiro.dto';
+import { CriarChamadoSaasDto, AtualizarChamadoSaasDto } from './dto/chamado-saas.dto';
 import { AtualizarEmpresaSaasDto } from './dto/atualizar-empresa-saas.dto';
 import { CriarPlanoDto, AtualizarPlanoDto } from './dto/criar-plano.dto';
 import * as bcrypt from 'bcrypt';
@@ -96,6 +97,100 @@ export class SaasService {
         select: { id: true, nome: true, cargo: true, codigo: true },
       });
       return { empresa, responsavel };
+    });
+  }
+
+  async listarChamados() {
+    return this.prisma.saasChamado.findMany({
+      include: { empresa: { select: { id: true, nomeFantasia: true, slug: true } },
+        _count: { select: { eventos: true } } },
+      orderBy: [{ atualizadoEm: 'desc' }],
+      take: 1500,
+    });
+  }
+
+  async buscarChamado(id: string) {
+    const chamado = await this.prisma.saasChamado.findUnique({
+      where: { id },
+      include: {
+        empresa: { select: { id: true, nomeFantasia: true, slug: true } },
+        eventos: { orderBy: { criadoEm: 'asc' }, take: 500 },
+      },
+    });
+    if (!chamado) throw new NotFoundException('Chamado não encontrado.');
+    return chamado;
+  }
+
+  async criarChamado(operadorId: string, dto: CriarChamadoSaasDto) {
+    await this.buscarEmpresaPorId(dto.empresaId);
+    if (dto.responsavelId) {
+      const responsavel = await this.prisma.saasOperador.findFirst({ where: { id: dto.responsavelId, ativo: true } });
+      if (!responsavel) throw new BadRequestException('Responsável não encontrado ou inativo.');
+    }
+    return this.prisma.saasChamado.create({
+      data: {
+        empresaId: dto.empresaId, titulo: dto.titulo.trim(), descricao: dto.descricao.trim(),
+        contatoNome: dto.contatoNome?.trim() || null,
+        contatoTelefone: dto.contatoTelefone?.replace(/\\D/g, '') || null,
+        categoria: dto.categoria || 'DUVIDA',
+        prioridade: dto.prioridade || 'NORMAL',
+        status: 'PENDENTE', responsavelId: dto.responsavelId || operadorId,
+        abertoPorId: operadorId,
+        eventos: { create: { operadorId, acao: 'ABERTURA', mensagem: 'Chamado aberto manualmente pelo SaaS Admin.' } },
+      },
+      include: { empresa: { select: { id: true, nomeFantasia: true, slug: true } } },
+    });
+  }
+
+  async atualizarChamado(id: string, operadorId: string, dto: AtualizarChamadoSaasDto) {
+    const atual = await this.prisma.saasChamado.findUnique({ where: { id } });
+    if (!atual) throw new NotFoundException('Chamado não encontrado.');
+    if (!Object.keys(dto).length) throw new BadRequestException('Nenhuma alteração informada.');
+    if (dto.titulo !== undefined && dto.titulo.trim().length < 3) throw new BadRequestException('Título muito curto.');
+    if (dto.descricao !== undefined && dto.descricao.trim().length < 5) throw new BadRequestException('Descrição muito curta.');
+    if (dto.responsavelId) {
+      const responsavel = await this.prisma.saasOperador.findFirst({ where: { id: dto.responsavelId, ativo: true } });
+      if (!responsavel) throw new BadRequestException('Responsável não encontrado ou inativo.');
+    }
+    const comDev = dto.status === 'COM_DEV' ? true : dto.comDev !== undefined ? dto.comDev : atual.comDev;
+    const status = dto.status ?? (comDev && atual.status === 'PENDENTE' ? 'COM_DEV' : atual.status);
+    // Resolved/cancelled items no longer remain in a developer queue.
+    const devAberto = !['RESOLVIDO', 'CANCELADO'].includes(status) && comDev;
+    const finalStatus = status === 'COM_DEV' && !devAberto ? 'EM_ATENDIMENTO' : status;
+    return this.prisma.$transaction(async tx => {
+      const updated = await tx.saasChamado.update({
+        where: { id },
+        data: {
+          ...(dto.titulo !== undefined ? { titulo: dto.titulo.trim() } : {}),
+          ...(dto.descricao !== undefined ? { descricao: dto.descricao.trim() } : {}),
+          ...(dto.contatoNome !== undefined ? { contatoNome: dto.contatoNome.trim() || null } : {}),
+          ...(dto.contatoTelefone !== undefined ? { contatoTelefone: dto.contatoTelefone.replace(/\\D/g, '') || null } : {}),
+          ...(dto.categoria !== undefined ? { categoria: dto.categoria } : {}),
+          ...(dto.prioridade !== undefined ? { prioridade: dto.prioridade } : {}),
+          ...(dto.responsavelId !== undefined ? { responsavelId: dto.responsavelId || null } : {}),
+          ...(dto.devResponsavel !== undefined ? { devResponsavel: dto.devResponsavel.trim() || null } : {}),
+          ...(dto.solucao !== undefined ? { solucao: dto.solucao.trim() || null } : {}),
+          status: finalStatus, comDev: devAberto,
+          resolvidoEm: finalStatus === 'RESOLVIDO' ? (atual.resolvidoEm ?? new Date()) : null,
+        },
+      });
+      const changes = Object.keys(dto).join(', ');
+      await tx.saasChamadoEvento.create({
+        data: { chamadoId: id, operadorId, acao: 'ATUALIZACAO', mensagem: 'Campos alterados: ' + changes + (dto.solucao ? ' · Solução: '+dto.solucao.trim() : '') },
+      });
+      return updated;
+    });
+  }
+
+  async registrarInteracaoChamado(id: string, operadorId: string, mensagem: string) {
+    const existe = await this.prisma.saasChamado.findUnique({ where: { id }, select: { id: true } });
+    if (!existe) throw new NotFoundException('Chamado não encontrado.');
+    return this.prisma.$transaction(async tx => {
+      const evento = await tx.saasChamadoEvento.create({
+        data: { chamadoId: id, operadorId, acao: 'INTERACAO_WHATSAPP', mensagem: mensagem.trim() },
+      });
+      await tx.saasChamado.update({ where: { id }, data: { atualizadoEm: new Date() } });
+      return evento;
     });
   }
 
