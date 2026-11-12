@@ -1,15 +1,16 @@
 import {
-  BadRequestException, ConflictException, Injectable, UnauthorizedException,
+  BadRequestException, ConflictException, Injectable, ServiceUnavailableException, UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomBytes, createHash } from 'node:crypto';
 import * as bcrypt from 'bcrypt';
 import { LoginDto } from './dto/login.dto';
 import { ValidarGerenteDto } from './dto/validar-gerente.dto';
 import { AlterarSenhaPrimeiroAcessoDto } from './dto/alterar-senha-primeiro-acesso.dto';
 import { AlterarSenhaDto } from './dto/alterar-senha.dto';
 import { AtualizarMeuPerfilDto } from './dto/atualizar-meu-perfil.dto';
+import { ConfirmarRecuperacaoSenhaDto } from './dto/recuperar-senha.dto';
 
 @Injectable()
 export class AuthService {
@@ -102,6 +103,89 @@ export class AuthService {
       });
     }
     return this.responder(usuario, novaSessao);
+  }
+
+  async solicitarRecuperacaoSenha(login: string, empresaId?: number) {
+    const generic = { mensagem: 'Se o acesso estiver cadastrado, enviaremos instruções ao e-mail do proprietário.' };
+    if (!empresaId) throw new UnauthorizedException('Distribuidora não identificada.');
+    const apiKey=process.env.RESEND_API_KEY;
+    const from=process.env.RESEND_FROM_EMAIL;
+    const base=process.env.FRONTEND_PUBLIC_URL;
+    if(!apiKey || !from || !base) {
+      throw new ServiceUnavailableException('Recuperação por e-mail ainda não configurada. Contate o administrador.');
+    }
+    const usuario=await this.usuarioPorLogin(login,empresaId);
+    if(!usuario || usuario.funcionario.empresaId!==empresaId)return generic;
+    const owner=await this.prisma.usuario.findFirst({
+      where: {ativo:true,funcionario:{empresaId,cargo:'PROPRIETARIO',ativo:true}},
+      select: { email:true },orderBy:{criadoEm:'asc'},
+    });
+    if(!owner?.email)return generic;
+    const token=randomBytes(32).toString('hex');
+    const tokenHash=createHash('sha256').update(token).digest('hex');
+    const expiraEm=new Date(Date.now()+15*60*1000);
+    await this.prisma.$transaction(async tx=>{
+      await tx.resetSenhaToken.deleteMany({where:{usuarioId:usuario.id,usadoEm:null}});
+      await tx.resetSenhaToken.create({data:{usuarioId:usuario.id,empresaId,tokenHash,expiraEm}});
+    });
+    const tenant=usuario.funcionario.empresa.subdominio||usuario.funcionario.empresa.slug;
+    let url:string;
+    try {
+      const baseUrl=new URL(base);
+      if(!['https:','http:'].includes(baseUrl.protocol))throw new Error('Invalid origin');
+      url=new URL('/'+encodeURIComponent(tenant)+'/recuperar-senha?token='+token,baseUrl).toString();
+    }catch{
+      await this.prisma.resetSenhaToken.deleteMany({where:{tokenHash}});
+      throw new ServiceUnavailableException('Configuração da recuperação indisponível.');
+    }
+    try {
+      const response=await fetch('https://api.resend.com/emails',{
+        method:'POST',
+        headers:{'Authorization':'Bearer '+apiKey,'Content-Type':'application/json'},
+        body:JSON.stringify({
+          from,to:[owner.email],subject:'Bebfy · Recuperação de acesso',
+          text:'Foi solicitada a recuperação do acesso do funcionário código '+
+            (usuario.funcionario.codigo??'não informado')+
+            ' na distribuidora '+usuario.funcionario.empresa.nomeFantasia+
+            '. Use este link pessoal, válido por 15 minutos: '+url+
+            '\nSe você não solicitou, ignore este e-mail.',
+        }),
+        signal:AbortSignal.timeout(8000),
+      });
+      if(!response.ok)throw new Error('Email provider returned an error');
+    }catch{
+      await this.prisma.resetSenhaToken.deleteMany({where:{tokenHash}});
+      throw new ServiceUnavailableException('Falha no envio do e-mail de recuperação. Tente novamente depois.');
+    }
+    return generic;
+  }
+
+  async confirmarRecuperacaoSenha(dto: ConfirmarRecuperacaoSenhaDto, empresaId?:number) {
+    if(!empresaId)throw new UnauthorizedException('Distribuidora não identificada.');
+    if(dto.novaSenha!==dto.confirmarNovaSenha)throw new BadRequestException('Confirmação da senha não corresponde.');
+    const hash=createHash('sha256').update(dto.token).digest('hex');
+    const token=await this.prisma.resetSenhaToken.findUnique({where:{tokenHash}});
+    if(!token || token.empresaId!==empresaId || token.usadoEm || token.expiraEm.getTime()<Date.now())
+      throw new UnauthorizedException('Link de recuperação inválido ou expirado.');
+    const user=await this.prisma.usuario.findUnique({
+      where:{id:token.usuarioId},
+      include:{funcionario:true},
+    });
+    if(!user?.ativo || !user.funcionario.ativo || user.funcionario.empresaId!==empresaId)
+      throw new UnauthorizedException('Acesso inválido ou desativado.');
+    await this.prisma.$transaction(async tx=>{
+      const used=await tx.resetSenhaToken.updateMany({
+        where:{id:token.id,usadoEm:null,expiraEm:{gt:new Date()}},
+        data:{usadoEm:new Date()},
+      });
+      if(used.count!==1)throw new UnauthorizedException('Link já utilizado.');
+      await tx.usuario.update({
+        where:{id:user.id},
+        data:{senha:await bcrypt.hash(dto.novaSenha,12),primeiroAcesso:false,
+          sessaoId:null,ultimaAtividadeEm:null},
+      });
+    });
+    return {alterada:true,mensagem:'Senha alterada. Entre novamente com a nova senha.'};
   }
 
   async alterarPrimeiraSenha(dto: AlterarSenhaPrimeiroAcessoDto) {
