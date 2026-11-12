@@ -19,24 +19,24 @@ export class SaasService {
   constructor(private readonly prisma: PrismaService) {}
 
   async criarEmpresa(dto: CriarEmpresaDto) {
-    const cnpj = dto.documento.replace(/\D/g, '');
+    const documento = dto.documento.replace(/\D/g, '');
     const subdominio = dto.subdominio.trim().toLowerCase();
     if (RESERVED_SLUGS.has(subdominio)) {
       throw new ConflictException('Esse endereço é reservado pela plataforma Bebfy. Escolha outro identificador.');
     }
     const email = dto.email.trim().toLowerCase();
-    if (!/^\d{14}$/.test(cnpj)) {
-      throw new ConflictException('CNPJ precisa conter 14 dígitos.');
+    if (!/^(?:\d{11}|\d{14})$/.test(documento)) {
+      throw new BadRequestException('Documento deve conter 11 dígitos (CPF) ou 14 dígitos (CNPJ).');
     }
     const [existente, usuarioExistente, plano] = await Promise.all([
       this.prisma.empresa.findFirst({
-        where: { OR: [{ cnpj }, { subdominio }, { slug: subdominio }] },
+        where: { OR: [{ cnpj: documento }, { subdominio }, { slug: subdominio }] },
       }),
       this.prisma.usuario.findUnique({ where: { email } }),
       this.prisma.plano.findUnique({ where: { id: dto.planoId } }),
     ]);
     if (existente) {
-      throw new ConflictException('Empresa já existente com este CNPJ ou subdomínio.');
+      throw new ConflictException('Empresa já existente com este documento ou subdomínio.');
     }
     if (usuarioExistente) {
       throw new ConflictException('E-mail do responsável já cadastrado.');
@@ -49,7 +49,7 @@ export class SaasService {
         data: {
           nomeFantasia: dto.nome,
           razaoSocial: dto.nome,
-          cnpj,
+          cnpj: documento,
           subdominio,
           slug: subdominio,
           planoId: dto.planoId,
@@ -67,7 +67,7 @@ export class SaasService {
         data: {
           empresaId: empresa.id,
           nomeEmpresa: dto.nome,
-          cnpj,
+          cnpj: documento,
           telefone: dto.telefone,
         },
       });
