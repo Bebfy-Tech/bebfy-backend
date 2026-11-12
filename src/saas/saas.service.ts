@@ -146,6 +146,51 @@ export class SaasService {
     });
   }
 
+  async listarAnexosChamado(chamadoId: string) {
+    await this.buscarChamado(chamadoId);
+    return this.prisma.saasChamadoAnexo.findMany({
+      where: { chamadoId },
+      select: { id: true, chamadoId: true, nome: true, mime: true, tamanho: true, operadorId: true, criadoEm: true },
+      orderBy: { criadoEm: 'desc' },
+      take: 100,
+    });
+  }
+
+  async anexarChamado(chamadoId: string, operadorId: string, file: {
+    originalname?: string; size?: number; buffer?: Buffer;
+  }) {
+    await this.buscarChamado(chamadoId);
+    const buffer = file?.buffer;
+    if (!buffer?.length || buffer.length > 3 * 1024 * 1024) {
+      throw new BadRequestException('Envie um arquivo de até 3 MB.');
+    }
+    const pdf = buffer.subarray(0, 5).toString('ascii') === '%PDF-';
+    const png = buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    const jpg = buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+    const mime = pdf ? 'application/pdf' : png ? 'image/png' : jpg ? 'image/jpeg' : null;
+    if (!mime) throw new BadRequestException('O suporte aceita somente PDF, JPG e PNG válidos.');
+    const ext = pdf ? '.pdf' : png ? '.png' : '.jpg';
+    const safeName = (file.originalname || 'evidencia').replace(/[^a-zA-Z0-9._ -]/g, '_').slice(0, 120);
+    const nome = safeName.replace(/\\.[a-zA-Z0-9]{1,5}$/, '') + ext;
+    return this.prisma.$transaction(async tx => {
+      const anexo = await tx.saasChamadoAnexo.create({
+        data: { chamadoId, operadorId, nome, mime, tamanho: buffer.length, conteudo: buffer },
+        select: { id: true, chamadoId: true, nome: true, mime: true, tamanho: true, operadorId: true, criadoEm: true },
+      });
+      await tx.saasChamadoEvento.create({
+        data: { chamadoId, operadorId, acao: 'ANEXO_ADICIONADO', mensagem: 'Evidência anexada: ' + nome },
+      });
+      await tx.saasChamado.update({ where: { id: chamadoId }, data: { atualizadoEm: new Date() } });
+      return anexo;
+    });
+  }
+
+  async baixarAnexoChamado(chamadoId: string, anexoId: string) {
+    const anexo = await this.prisma.saasChamadoAnexo.findFirst({ where: { id: anexoId, chamadoId } });
+    if (!anexo) throw new NotFoundException('Anexo de suporte não encontrado.');
+    return anexo;
+  }
+
   async listarChamados() {
     return this.prisma.saasChamado.findMany({
       include: { empresa: { select: { id: true, nomeFantasia: true, slug: true } },
