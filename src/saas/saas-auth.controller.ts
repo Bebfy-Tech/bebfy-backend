@@ -18,10 +18,16 @@ class CriarOperadorDto {
   @IsArray() @IsString({each: true}) permissoes: string[];
 }
 class EditarOperadorDto {
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) codigo?: number;
   @IsOptional() @IsString() @MinLength(2) @MaxLength(120) nome?: string;
   @IsOptional() @IsString() @MinLength(12) senha?: string;
   @IsOptional() @IsArray() @IsString({each: true}) permissoes?: string[];
   @IsOptional() @IsBoolean() ativo?: boolean;
+}
+class MeuPerfilSaasDto {
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(120) nome?: string;
+  @IsOptional() @IsString() senhaAtual?: string;
+  @IsOptional() @IsString() @MinLength(12) novaSenha?: string;
 }
 @Controller('saas/auth')
 export class SaasAuthController {
@@ -32,6 +38,10 @@ export class SaasAuthController {
   perfil(@Req() req: any) {
     const { id, codigo, nome, cargo, permissoes, ativo } = req.saasUser;
     return { id, codigo, nome, cargo, permissoes, ativo };
+  }
+  @Patch('perfil') @UseGuards(SaasAuthGuard)
+  atualizarPerfil(@Req() req: any, @Body() dto: MeuPerfilSaasDto) {
+    return this.service.atualizarPerfil(req.saasUser.id, dto);
   }
   @Post('logout') @HttpCode(200) @UseGuards(SaasAuthGuard)
   sair(@Req() req: any) { return this.service.sair(req.saasUser.id, req.saasUser.sessaoId); }
