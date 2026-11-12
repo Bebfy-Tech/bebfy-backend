@@ -223,7 +223,9 @@ export class SaasService {
         orderBy: { vencimento: 'desc' },
       }),
     ]);
-    const now = Date.now();
+    // Vencimento é uma data civil: só passa a "vencido" no dia seguinte
+    // ao prazo, no fuso comercial brasileiro (não à meia-noite UTC).
+    const hoje = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo' }).format(new Date());
     const resultado = cobrancas.map(c => {
       const valorCentavos = Math.round(Number(c.valor) * 100);
       const recebidoCentavos = c.pagamentos.length
@@ -231,7 +233,7 @@ export class SaasService {
         : c.pagoEm ? valorCentavos : 0;
       const saldoCentavos = Math.max(0, valorCentavos - recebidoCentavos);
       const status = saldoCentavos === 0 ? 'PAGO'
-        : new Date(c.vencimento).getTime() < now ? 'VENCIDO'
+        : c.vencimento.toISOString().slice(0, 10) < hoje ? 'VENCIDO'
         : recebidoCentavos ? 'PARCIAL' : 'PENDENTE';
       return { ...c, valor: Number(c.valor), recebido: recebidoCentavos / 100,
         saldo: saldoCentavos / 100, status,
