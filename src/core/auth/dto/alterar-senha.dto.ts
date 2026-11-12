@@ -1,11 +1,11 @@
-import { IsString, MinLength } from 'class-validator';
+import { IsString, IsNotEmpty } from 'class-validator';
 
 export class AlterarSenhaDto {
   @IsString()
   senhaAtual: string;
 
   @IsString()
-  @MinLength(10)
+  @IsNotEmpty()
   novaSenha: string;
 
   @IsString()
