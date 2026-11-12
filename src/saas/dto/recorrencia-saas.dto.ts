@@ -5,5 +5,5 @@ export class ConfigurarRecorrenciaSaasDto {
   @Type(()=>Number) @IsInt() @Min(1) @Max(28) diaVencimento: number;
 }
 export class GerarMensalidadesSaasDto {
-  @IsString() @Matches(/^20\\d{2}-(0[1-9]|1[0-2])$/) competencia: string;
+  @IsString() @Matches(/^20\d{2}-(0[1-9]|1[0-2])$/) competencia: string;
 }
