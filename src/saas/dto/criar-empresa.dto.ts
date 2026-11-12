@@ -6,7 +6,8 @@ export class CriarEmpresaDto {
   nome: string;
 
   @IsString({ message: 'O documento (CPF ou CNPJ) deve ser um texto.' })
-  @IsNotEmpty({ message: 'O documento (CNPJ) é obrigatório.' })
+  @IsNotEmpty({ message: 'O documento (CPF ou CNPJ) é obrigatório.' })
+  @Matches(/^(?:\d{11}|\d{14})$/, { message: 'Informe CPF (11 dígitos) ou CNPJ (14 dígitos) sem pontuação.' })
   documento: string;
 
   @IsString({ message: 'O subdomínio deve ser um texto.' })
