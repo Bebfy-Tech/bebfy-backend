@@ -14,6 +14,7 @@ import { SaasService } from './saas.service';
 import { SaasAuthGuard, SaasPermissionGuard } from './saas-auth.guard';
 import { AlterarStatusEmpresaDto } from './dto/alterar-status-empresa.dto';
 import { AlternarModuloDto } from './dto/alternar-modulo.dto';
+import { CriarCobrancaSaasDto, MarcarPagamentoSaasDto } from './dto/cobranca-saas.dto';
 import { PersonalizarModuloDto } from './dto/personalizar-modulo.dto';
 import { AlterarPlanoDto } from './dto/alterar-plano.dto';
 import { CriarEmpresaDto } from './dto/criar-empresa.dto';
@@ -58,6 +59,25 @@ export class SaasController {
   ) {
     return this.saasService.alterarStatusEmpresa(id, dto.status);
   }
+
+  @UseGuards(SaasPermissionGuard('EMPRESAS'))
+  @Get('empresas/:id/cobrancas')
+  listarCobrancas(@Param('id', ParseIntPipe) id: number) {
+    return this.saasService.listarCobrancas(id);
+  }
+
+  @UseGuards(SaasPermissionGuard('EMPRESAS'))
+  @Post('empresas/:id/cobrancas')
+  criarCobranca(@Param('id', ParseIntPipe) id: number, @Body() dto: CriarCobrancaSaasDto) {
+    return this.saasService.criarCobranca(id, dto);
+  }
+
+  @UseGuards(SaasPermissionGuard('EMPRESAS'))
+  @Patch('empresas/:id/cobrancas/:cobrancaId/pagamento')
+  marcarPagamento(
+    @Param('id', ParseIntPipe) id: number, @Param('cobrancaId') cobrancaId: string,
+    @Body() dto: MarcarPagamentoSaasDto,
+  ) { return this.saasService.marcarPagamento(id, cobrancaId, dto.pago); }
 
   @UseGuards(SaasPermissionGuard('EMPRESAS'))
   @Patch('empresas/:id/inadimplencia')
