@@ -1,4 +1,4 @@
-import { IsEmail, IsInt, IsNotEmpty, IsString, MinLength, Matches } from 'class-validator';
+import { IsEmail, IsInt, IsNotEmpty, IsString, Matches } from 'class-validator';
 
 export class CriarEmpresaDto {
   @IsString({ message: 'O nome da empresa deve ser um texto.' })
@@ -36,6 +36,6 @@ export class CriarEmpresaDto {
   cpfResponsavel: string;
 
   @IsString()
-  @MinLength(10)
+  @IsNotEmpty()
   senhaInicial: string;
 }
