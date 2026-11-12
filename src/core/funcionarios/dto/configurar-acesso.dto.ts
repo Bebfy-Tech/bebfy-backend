@@ -1,11 +1,11 @@
-import { IsArray, IsEmail, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import { IsArray, IsEmail, IsInt, IsOptional, IsString, Min, IsNotEmpty } from 'class-validator';
 
 export class ConfigurarAcessoDto {
   @IsEmail()
   email: string;
 
   @IsString()
-  @MinLength(10)
+  @IsNotEmpty()
   senha: string;
 
   @IsOptional()
