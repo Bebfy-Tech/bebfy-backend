@@ -22,6 +22,7 @@ describe('SaaS: administradores independentes das distribuidoras', () => {
   let adminId = '';
   let collaboratorId = '';
   let sampleCompanyId = 0;
+  let billingPlanId = 0;
   let reusedAdminToken = '';
   const code = 90000000 + Math.floor(Math.random() * 8000000);
   const password = 'senha-qa-forte-' + randomUUID();
@@ -40,6 +41,7 @@ describe('SaaS: administradores independentes das distribuidoras', () => {
   afterAll(async () => {
     if (app) await app.close();
     if (sampleCompanyId) await db.empresa.deleteMany({where:{id:sampleCompanyId}});
+    if (billingPlanId) await db.plano.deleteMany({where:{id:billingPlanId}});
     if (collaboratorId) await db.saasOperador.deleteMany({where:{id:collaboratorId}});
     if (adminId) await db.saasOperador.deleteMany({where:{id:adminId}});
     await db.$disconnect();
@@ -261,6 +263,33 @@ describe('SaaS: administradores independentes das distribuidoras', () => {
     expect(actions).toContain('ANEXO_FINANCEIRO');
     expect(actions).toContain('BLOQUEIO_FINANCEIRO');
     expect(actions).toContain('LIBERACAO_TEMPORARIA');
+  });
+
+  it('prepara mensalidade somente para clientes opt-in e evita duplicações na mesma competência', async () => {
+    const server=app.getHttpServer();
+    const token={Authorization:'Bearer '+reusedAdminToken};
+    const plan=await db.plano.create({data:{nome:'Plano recorrência QA',precoMensal:149.90}});
+    billingPlanId=plan.id;
+    await db.empresa.update({where:{id:sampleCompanyId},data:{planoId:plan.id,status:'ATIVA'}});
+    const configure=await request(server).patch('/saas/admin/financeiro/empresas/'+sampleCompanyId+'/recorrencia')
+      .set(token).send({recorrente:true,diaVencimento:15});
+    expect(configure.status).toBe(200);
+    const endpoint='/saas/admin/financeiro/gerar-mensalidades';
+    const first=await request(server).post(endpoint).set(token).send({competencia:'2026-12'});
+    expect(first.status).toBe(201);
+    expect(first.body.geradas).toBeGreaterThanOrEqual(1);
+    const second=await request(server).post(endpoint).set(token).send({competencia:'2026-12'});
+    expect(second.status).toBe(201);
+    expect(second.body.geradas).toBe(0);
+    const recs=await db.saasMensalidadeGerada.findMany({
+      where:{empresaId:sampleCompanyId,competencia:'2026-12'},
+      include:{cobranca:true},
+    });
+    expect(recs).toHaveLength(1);
+    expect(Number(recs[0].cobranca.valor)).toBe(149.90);
+    const invalid=await request(server).patch('/saas/admin/financeiro/empresas/'+sampleCompanyId+'/recorrencia')
+      .set(token).send({recorrente:true,diaVencimento:31});
+    expect(invalid.status).toBe(400);
   });
 
 });
