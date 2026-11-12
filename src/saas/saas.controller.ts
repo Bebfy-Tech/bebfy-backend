@@ -35,6 +35,18 @@ export class SaasController {
   constructor(private readonly saasService: SaasService) {}
 
   @UseGuards(SaasPermissionGuard('SUPORTE'))
+  @Get('suporte/empresas')
+  listarEmpresasSuporte() {
+    return this.saasService.listarEmpresasSuporte();
+  }
+
+  @UseGuards(SaasPermissionGuard('SUPORTE'))
+  @Get('suporte/operadores')
+  listarOperadoresSuporte() {
+    return this.saasService.listarOperadoresSuporte();
+  }
+
+  @UseGuards(SaasPermissionGuard('SUPORTE'))
   @Get('suporte/chamados')
   listarChamados() {
     return this.saasService.listarChamados();
