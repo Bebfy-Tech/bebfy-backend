@@ -238,6 +238,22 @@ export class SaasService {
     });
   }
 
+  async listarDescricoesModulos() {
+    return this.prisma.saasModuloDescricao.findMany();
+  }
+
+  async personalizarModulo(modulo: string, dto: {nome:string;descricao:string}) {
+    if (!Object.values(NomeModulo).includes(modulo as NomeModulo)) {
+      throw new BadRequestException('Módulo não pertence ao catálogo fixo.');
+    }
+    const key=modulo as NomeModulo;
+    return this.prisma.saasModuloDescricao.upsert({
+      where: { modulo: key },
+      create: { modulo: key, nome: dto.nome.trim(), descricao: dto.descricao.trim() },
+      update: { nome: dto.nome.trim(), descricao: dto.descricao.trim() },
+    });
+  }
+
   async alternarModuloEmpresa(empresaId: number, modulo: NomeModulo, ativo: boolean) {
     await this.buscarEmpresaPorId(empresaId);
 
