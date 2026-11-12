@@ -81,6 +81,7 @@ model Empresa {
   inadimplente         Boolean               @default(false)
   liberacaoFinanceiraAte DateTime?
   historicoLiberacoes  SaasLiberacaoAcesso[]
+  cobrancasSaas       SaasCobranca[]
   planoId              Int?
   plano                Plano?                @relation(fields: [planoId], references: [id])
   criadoEm             DateTime              @default(now())
@@ -104,6 +105,22 @@ model Empresa {
   logsAuditoria        LogAuditoria[]
 
   @@map("empresas")
+}
+
+model SaasCobranca {
+  id            String   @id @default(uuid())
+  empresaId     Int
+  empresa       Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  referencia    String
+  valor         Decimal  @db.Decimal(10, 2)
+  vencimento    DateTime
+  pagoEm        DateTime?
+  linhaDigitavel String?
+  observacao    String?
+  criadoEm      DateTime @default(now())
+
+  @@index([empresaId, vencimento])
+  @@map("saas_cobrancas")
 }
 
 model SaasLiberacaoAcesso {
