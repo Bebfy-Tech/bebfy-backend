@@ -89,6 +89,12 @@ export class AuthController {
     return this.authService.validarGerente(dto, empresaId);
   }
 
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @Get('modulos')
+  modulosAtivos(@Request() req: any) {
+    return this.authService.modulosDisponiveis(req.user.empresaId);
+  }
+
   // Retorna a sessão do utilizador logado e os dados da empresa vinculada
   @UseGuards(JwtAuthGuard, TenantGuard)
   @Get('perfil')
