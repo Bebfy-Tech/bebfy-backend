@@ -16,6 +16,7 @@ import { AlterarStatusEmpresaDto } from './dto/alterar-status-empresa.dto';
 import { AlternarModuloDto } from './dto/alternar-modulo.dto';
 import { AlterarPlanoDto } from './dto/alterar-plano.dto';
 import { CriarEmpresaDto } from './dto/criar-empresa.dto';
+import { AtualizarEmpresaSaasDto } from './dto/atualizar-empresa-saas.dto';
 import { CriarPlanoDto, AtualizarPlanoDto } from './dto/criar-plano.dto';
 
 @UseGuards(SaasAuthGuard)
@@ -40,6 +41,12 @@ export class SaasController {
   @Get('empresas/:id')
   buscarEmpresaPorId(@Param('id', ParseIntPipe) id: number) {
     return this.saasService.buscarEmpresaPorId(id);
+  }
+
+  @UseGuards(SaasPermissionGuard('EMPRESAS'))
+  @Patch('empresas/:id')
+  editarEmpresa(@Param('id', ParseIntPipe) id: number, @Body() dto: AtualizarEmpresaSaasDto) {
+    return this.saasService.editarEmpresa(id, dto);
   }
 
   @UseGuards(SaasPermissionGuard('EMPRESAS'))
