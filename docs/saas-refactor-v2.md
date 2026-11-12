@@ -35,10 +35,10 @@ Fluxo: funcionário informa seu código/CPF no ambiente da distribuidora -> link
 A verificação inicial de titularidade do endereço do proprietário deve ser incluída em um processo operacional de onboarding antes de depender do canal em produção.
 
 ## Regras de senha
-A especificação solicitou remover todos os mínimos de comprimento. **Essa exceção não foi implementada por risco de segurança.**
-- Senhas de distribuidoras e troca/recuperação: mínimo de 10 caracteres.
-- Senhas de operadores SaaS: mínimo de 12 caracteres.
-- Senhas não são retornadas nas APIs. A redefinição temporária encerra a sessão anterior.
+Na revisão solicitada, foram removidos os mínimos de comprimento para as senhas nos fluxos de cadastro, primeiro acesso, funcionários, troca e recuperação, tanto do SaaS quanto das distribuidoras. Campos obrigatórios continuam não aceitando valores vazios. Recomenda-se usar senhas longas e únicas; senhas curtas são menos seguras.
+- Senhas continuam armazenadas com hash bcrypt, sem retorno nas APIs.
+- Trocas e redefinições continuam revogando as sessões anteriores quando aplicável.
+- Antes de utilizar em produção, auditar demais endpoints, testes e políticas de senha para confirmar a consistência.
 
 ## Planos, módulos e cobrança
 - Ao cadastrar empresa ou mudar para um plano, módulos incluídos no novo plano são registrados na tabela `empresa_modulos`.
