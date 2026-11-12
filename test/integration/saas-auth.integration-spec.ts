@@ -118,4 +118,72 @@ describe('SaaS: administradores independentes das distribuidoras', () => {
     expect(blockedGrace.status).toBe(400);
   });
 
+  it('controla cobranças, pagamentos parciais, documentos privados e histórico financeiro', async () => {
+    const server = app.getHttpServer();
+    const auth = await request(server).post('/saas/auth/login').send({codigo:code,senha:password});
+    expect(auth.status).toBe(200);
+    const bearer = { Authorization: 'Bearer ' + auth.body.access_token };
+    await db.empresa.update({ where: { id: sampleCompanyId }, data: { status: 'ATIVA' } });
+
+    const initial = await request(server).get('/saas/admin/financeiro').set(bearer);
+    expect(initial.status).toBe(200);
+    expect(initial.body.empresas.some((c:{id:number})=>c.id===sampleCompanyId)).toBe(true);
+
+    const created = await request(server).post('/saas/admin/empresas/' + sampleCompanyId + '/cobrancas')
+      .set(bearer).send({ referencia: 'QA assinatura ' + randomUUID().slice(0,6),
+        valor: 120.50, vencimento: '2026-12-15T12:00:00.000Z' });
+    expect(created.status).toBe(201);
+    const cobrancaId = created.body.id;
+    const prefix = '/saas/admin/financeiro/empresas/' + sampleCompanyId;
+    const paymentsUrl = prefix + '/cobrancas/' + cobrancaId + '/pagamentos';
+    const partial = await request(server).post(paymentsUrl).set(bearer)
+      .send({valor:40.50,pagoEm:new Date().toISOString(),forma:'PIX'});
+    expect(partial.status).toBe(201);
+    const afterPartial = await request(server).get('/saas/admin/financeiro').set(bearer);
+    const bill = afterPartial.body.cobrancas.find((c:{id:string})=>c.id===cobrancaId);
+    expect(bill.recebido).toBe(40.50);
+    expect(bill.saldo).toBe(80);
+    expect(bill.status).toBe('PARCIAL');
+
+    const excess = await request(server).post(paymentsUrl).set(bearer)
+      .send({valor:90,pagoEm:new Date().toISOString(),forma:'PIX'});
+    expect(excess.status).toBe(400);
+    const final = await request(server).post(paymentsUrl).set(bearer)
+      .send({valor:80,pagoEm:new Date().toISOString(),forma:'BOLETO'});
+    expect(final.status).toBe(201);
+    const afterFull = await request(server).get('/saas/admin/financeiro').set(bearer);
+    const paid = afterFull.body.cobrancas.find((c:{id:string})=>c.id===cobrancaId);
+    expect(paid.status).toBe('PAGO');
+    expect(paid.saldo).toBe(0);
+    expect((await request(server).patch('/saas/admin/empresas/'+sampleCompanyId+'/cobrancas/'+cobrancaId+'/pagamento')
+      .set(bearer).send({pago:false})).status).toBe(409);
+
+    const attachment = await request(server).post(prefix + '/anexos')
+      .set(bearer).field('tipo','BOLETO').field('cobrancaId',cobrancaId)
+      .attach('arquivo',Buffer.from('%PDF-1.4\n%%EOF\n'),'boleto-qa.pdf');
+    expect(attachment.status).toBe(201);
+    const files = await request(server).get(prefix + '/anexos').set(bearer);
+    expect(files.status).toBe(200);
+    expect(files.body.some((a:{id:string})=>a.id===attachment.body.id)).toBe(true);
+    const fetched = await request(server).get(prefix + '/anexos/' + attachment.body.id).set(bearer);
+    expect(fetched.status).toBe(200);
+    expect(fetched.headers['content-type']).toContain('application/pdf');
+    expect((await request(server).get(prefix + '/anexos/' + attachment.body.id)).status).toBe(401);
+
+    const blocked = await request(server).patch('/saas/admin/empresas/'+sampleCompanyId+'/inadimplencia')
+      .set(bearer).send({inadimplente:true});
+    expect(blocked.status).toBe(200);
+    const grace = await request(server).post('/saas/admin/empresas/'+sampleCompanyId+'/liberar-acesso')
+      .set(bearer).send({dias:3,motivo:'Acordo financeiro em validação.'});
+    expect(grace.status).toBe(201);
+    const audit = await request(server).get(prefix+'/historico').set(bearer);
+    expect(audit.status).toBe(200);
+    const actions = audit.body.map((event:{acao:string})=>event.acao);
+    expect(actions).toContain('COBRANCA_CRIADA');
+    expect(actions).toContain('PAGAMENTO_REGISTRADO');
+    expect(actions).toContain('ANEXO_FINANCEIRO');
+    expect(actions).toContain('BLOQUEIO_FINANCEIRO');
+    expect(actions).toContain('LIBERACAO_TEMPORARIA');
+  });
+
 });
