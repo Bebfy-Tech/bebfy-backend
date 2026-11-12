@@ -56,6 +56,13 @@ export class SaasService {
           status: StatusEmpresa.EM_TESTE,
         },
       });
+      // Defaults are saved as explicit access records, so existing module guards keep working.
+      if (plano.modulosPadrao.length) {
+        await tx.empresaModulo.createMany({
+          data: plano.modulosPadrao.map(modulo => ({ empresaId: empresa.id, modulo, ativo: true })),
+          skipDuplicates: true,
+        });
+      }
       await tx.configGlobal.create({
         data: {
           empresaId: empresa.id,
@@ -176,7 +183,7 @@ export class SaasService {
 
   async criarPlano(dto: CriarPlanoDto) {
     return this.prisma.plano.create({
-      data: { nome: dto.nome, tipo: dto.tipo, precoMensal: dto.precoMensal },
+      data: { nome: dto.nome, tipo: dto.tipo, precoMensal: dto.precoMensal, modulosPadrao: dto.modulosPadrao ?? [] },
     });
   }
 
@@ -187,7 +194,8 @@ export class SaasService {
       where: { id },
       data: { ...(dto.nome !== undefined ? { nome: dto.nome } : {}),
         ...(dto.tipo !== undefined ? { tipo: dto.tipo } : {}),
-        ...(dto.precoMensal !== undefined ? { precoMensal: dto.precoMensal } : {}) },
+        ...(dto.precoMensal !== undefined ? { precoMensal: dto.precoMensal } : {}),
+        ...(dto.modulosPadrao !== undefined ? { modulosPadrao: dto.modulosPadrao } : {}) },
     });
   }
 
@@ -208,10 +216,21 @@ export class SaasService {
       throw new NotFoundException(`Plano com ID ${planoId} não encontrado.`);
     }
 
-    return this.prisma.empresa.update({
-      where: { id: empresaId },
-      data: { planoId },
-      include: { plano: true },
+    return this.prisma.$transaction(async tx => {
+      const empresa = await tx.empresa.update({
+        where: { id: empresaId },
+        data: { planoId },
+        include: { plano: true, modulosAtivos: true },
+      });
+      // Safely add newly included modules; never silently delete add-ons already granted.
+      for (const modulo of plano.modulosPadrao) {
+        await tx.empresaModulo.upsert({
+          where: { empresaId_modulo: { empresaId, modulo } },
+          create: { empresaId, modulo, ativo: true },
+          update: { ativo: true },
+        });
+      }
+      return empresa;
     });
   }
 }
