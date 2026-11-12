@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ConflictException, BadRequestException }
 import { PrismaService } from '../core/prisma/prisma.service';
 import { StatusEmpresa, NomeModulo } from '@prisma/client';
 import { CriarEmpresaDto } from './dto/criar-empresa.dto';
+import { AtualizarEmpresaSaasDto } from './dto/atualizar-empresa-saas.dto';
 import { CriarPlanoDto, AtualizarPlanoDto } from './dto/criar-plano.dto';
 import * as bcrypt from 'bcrypt';
 
@@ -116,6 +117,12 @@ export class SaasService {
         modulosAtivos: true,
         config: true,
         historicoLiberacoes: { orderBy: { criadoEm: 'desc' }, take: 20 },
+        funcionarios: {
+          where: { cargo: 'PROPRIETARIO' },
+          take: 1,
+          select: { id: true, codigo: true, nome: true, cpf: true, telefone: true,
+            usuario: { select: { email: true, ativo: true } } },
+        },
         _count: {
           select: { funcionarios: true, produtos: true, vendas: true, clientes: true },
         },
@@ -127,6 +134,75 @@ export class SaasService {
     }
 
     return empresa;
+  }
+
+
+  async editarEmpresa(id: number, dto: AtualizarEmpresaSaasDto) {
+    const empresa = await this.buscarEmpresaPorId(id);
+    const responsavel = empresa.funcionarios[0];
+    if ((dto.emailResponsavel || dto.cpfResponsavel || dto.nomeResponsavel || dto.senhaTemporaria) && !responsavel) {
+      throw new BadRequestException('Proprietário não localizado; ajuste o cadastro antes de alterar o acesso.');
+    }
+    if (dto.documento && dto.documento !== empresa.cnpj) {
+      const exists = await this.prisma.empresa.findFirst({ where: { cnpj: dto.documento, NOT: { id } } });
+      if (exists) throw new ConflictException('Documento já pertence a outra distribuidora.');
+    }
+    const email = dto.emailResponsavel?.trim().toLowerCase();
+    if (email && email !== responsavel?.usuario?.email) {
+      const already = await this.prisma.usuario.findUnique({ where: { email } });
+      if (already) throw new ConflictException('E-mail já cadastrado em outra conta.');
+    }
+    return this.prisma.$transaction(async tx => {
+      await tx.empresa.update({
+        where: { id },
+        data: {
+          ...(dto.nomeFantasia !== undefined ? { nomeFantasia: dto.nomeFantasia.trim() } : {}),
+          ...(dto.razaoSocial !== undefined ? { razaoSocial: dto.razaoSocial.trim() } : {}),
+          ...(dto.documento !== undefined ? { cnpj: dto.documento } : {}),
+        },
+      });
+      if (dto.telefone !== undefined || dto.nomeFantasia !== undefined || dto.documento !== undefined) {
+        await tx.configGlobal.upsert({
+          where: { empresaId: id },
+          create: { empresaId: id, nomeEmpresa: dto.nomeFantasia ?? empresa.nomeFantasia,
+            cnpj: dto.documento ?? empresa.cnpj, telefone: dto.telefone },
+          update: {
+            ...(dto.nomeFantasia !== undefined ? { nomeEmpresa: dto.nomeFantasia.trim() } : {}),
+            ...(dto.documento !== undefined ? { cnpj: dto.documento } : {}),
+            ...(dto.telefone !== undefined ? { telefone: dto.telefone } : {}),
+          },
+        });
+      }
+      if (responsavel && (dto.nomeResponsavel !== undefined || dto.cpfResponsavel !== undefined || dto.telefone !== undefined)) {
+        await tx.funcionario.update({
+          where: { id: responsavel.id },
+          data: {
+            ...(dto.nomeResponsavel !== undefined ? { nome: dto.nomeResponsavel.trim() } : {}),
+            ...(dto.cpfResponsavel !== undefined ? { cpf: dto.cpfResponsavel } : {}),
+            ...(dto.telefone !== undefined ? { telefone: dto.telefone } : {}),
+          },
+        });
+      }
+      if (responsavel?.usuario && (email || dto.senhaTemporaria)) {
+        await tx.usuario.update({
+          where: { funcionarioId: responsavel.id },
+          data: {
+            ...(email ? { email } : {}),
+            ...(dto.senhaTemporaria ? {
+              senha: await bcrypt.hash(dto.senhaTemporaria, 12),
+              primeiroAcesso: true, sessaoId: null,
+            } : {}),
+          },
+        });
+      }
+      return tx.empresa.findUnique({
+        where: { id },
+        include: { plano: true, modulosAtivos: true, config: true,
+          funcionarios: { where: { cargo: 'PROPRIETARIO' }, take: 1,
+            select: { id: true, codigo: true, nome: true, cpf: true, telefone: true,
+              usuario: { select: { email: true, ativo: true } } } } },
+      });
+    });
   }
 
   async definirInadimplencia(id: number, inadimplente: boolean) {
