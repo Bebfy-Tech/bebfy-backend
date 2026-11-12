@@ -43,7 +43,7 @@ export class SaasAuthService {
   }
 
   async criar(input: { codigo: number; nome: string; senha: string; cargo: SaasCargo; permissoes: string[] }) {
-    if (input.senha.length < 12) throw new BadRequestException('A senha deve ter no mínimo 12 caracteres.');
+
     if (input.permissoes.some(p => !SAAS_PERMISSIONS.includes(p as SaasPermission))) {
       throw new BadRequestException('Permissão inválida.');
     }
@@ -63,9 +63,7 @@ export class SaasAuthService {
     if (input.novaSenha && (!input.senhaAtual || !await bcrypt.compare(input.senhaAtual, existente.senha))) {
       throw new UnauthorizedException('Senha atual incorreta.');
     }
-    if (input.novaSenha && input.novaSenha.length < 12) {
-      throw new BadRequestException('A nova senha deve conter pelo menos 12 caracteres.');
-    }
+
     if (!input.nome && input.email === undefined && !input.novaSenha) throw new BadRequestException('Nenhuma alteração informada.');
     const atualizado = await this.prisma.saasOperador.update({
       where: { id },
@@ -83,7 +81,7 @@ export class SaasAuthService {
     if (!existing) throw new BadRequestException('Funcionário não encontrado.');
     if (existing.cargo === SaasCargo.SUPER_ADMIN) throw new ForbiddenException('Superadministradores são geridos somente por provisionamento seguro.');
     if (input.permissoes?.some(p => !SAAS_PERMISSIONS.includes(p as SaasPermission))) throw new BadRequestException('Permissão inválida.');
-    if (input.senha && input.senha.length < 12) throw new BadRequestException('A senha deve ter no mínimo 12 caracteres.');
+
     const user = await this.prisma.saasOperador.update({
       where: { id },
       data: {
