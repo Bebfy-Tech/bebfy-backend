@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CreateVendaDto } from './dto/create-venda.dto';
@@ -11,6 +12,7 @@ import {
   StatusVenda,
   StatusAcerto,
   TipoTransacaoFiado,
+  TipoEntrega,
 } from '@prisma/client';
 
 @Injectable()
@@ -18,6 +20,16 @@ export class VendasService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(empresaId: number, createVendaDto: CreateVendaDto) {
+    // A disabled delivery module cannot be bypassed by submitting DELIVERY via PDV.
+    if (createVendaDto.tipoEntrega === TipoEntrega.DELIVERY) {
+      const module = await this.prisma.empresaModulo.findUnique({
+        where: { empresaId_modulo: { empresaId, modulo: 'ENTREGAS_DELIVERY' } },
+        select: { ativo: true },
+      });
+      if (module && !module.ativo) {
+        throw new ForbiddenException('Módulo de entregas desativado para esta distribuidora.');
+      }
+    }
     const caixa = await this.prisma.caixa.findUnique({
       where: { id: createVendaDto.caixaId },
       include: { operador: true },
