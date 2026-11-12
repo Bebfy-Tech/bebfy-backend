@@ -132,6 +132,15 @@ model Plano {
   @@map("planos")
 }
 
+model SaasModuloDescricao {
+  modulo    NomeModulo @id
+  nome      String
+  descricao String
+  atualizadoEm DateTime @updatedAt
+
+  @@map("saas_modulo_descricoes")
+}
+
 model EmpresaModulo {
   id        Int        @id @default(autoincrement())
   empresaId Int
