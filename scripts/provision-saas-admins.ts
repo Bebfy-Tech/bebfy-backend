@@ -3,7 +3,7 @@ import * as bcrypt from 'bcrypt';
 import { emitKeypressEvents } from 'node:readline';
 
 const db = new PrismaClient();
-const PERMISSIONS = ['EMPRESAS', 'PLANOS', 'MODULOS', 'FUNCIONARIOS'];
+const PERMISSIONS = ['EMPRESAS', 'PLANOS', 'MODULOS', 'FUNCIONARIOS', 'SUPORTE'];
 
 function promptHidden(question: string): Promise<string> {
   if (!process.stdin.isTTY || !process.stdin.setRawMode) {
