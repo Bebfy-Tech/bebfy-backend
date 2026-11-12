@@ -10,7 +10,7 @@ import * as bcrypt from 'bcrypt';
 // Never allow a new store to shadow platform/admin, public or app routes.
 const RESERVED_SLUGS = new Set([
   'saas','api','admin','acessar','login','logout','dashboard','pdv',
-  'primeiro-acesso','produtos','clientes','funcionarios','categorias',
+  'primeiro-acesso','recuperar-senha','produtos','clientes','funcionarios','categorias',
   'lotes','estoque','financeiro','caixas','vendas','delivery','fiados',
   'vasilhames','fornecedores','relatorios','configuracoes','assets',
   'static','www','health','favicon.ico','robots.txt',
