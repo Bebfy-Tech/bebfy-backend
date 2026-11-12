@@ -307,19 +307,38 @@ export class SaasService {
     });
   }
 
-  async marcarPagamento(empresaId: number, cobrancaId: string, pago: boolean) {
-    const existing=await this.prisma.saasCobranca.findFirst({ where:{id:cobrancaId,empresaId} });
-    if(!existing)throw new NotFoundException('Cobrança não encontrada nesta distribuidora.');
-    return this.prisma.saasCobranca.update({
-      where:{id:cobrancaId},data:{pagoEm:pago?new Date():null},
+  async marcarPagamento(empresaId: number, cobrancaId: string, pago: boolean, operadorId?: string) {
+    const existing = await this.prisma.saasCobranca.findFirst({
+      where: { id: cobrancaId, empresaId }, include: { pagamentos: true },
+    });
+    if (!existing) throw new NotFoundException('Cobrança não encontrada nesta distribuidora.');
+    if (existing.pagamentos.length) {
+      throw new ConflictException('Essa cobrança possui pagamentos detalhados. Use o controle financeiro para registrar novos pagamentos.');
+    }
+    return this.prisma.$transaction(async tx => {
+      const changed = await tx.saasCobranca.update({
+        where: { id: cobrancaId }, data: { pagoEm: pago ? new Date() : null },
+      });
+      if (operadorId) await tx.saasFinanceiroEvento.create({
+        data: { empresaId, operadorId, acao: pago ? 'QUITACAO_MANUAL' : 'ESTORNO_MANUAL',
+          descricao: (pago ? 'Quitação manual registrada: ' : 'Quitação manual desfeita: ') + existing.referencia },
+      });
+      return changed;
     });
   }
 
-  async definirInadimplencia(id: number, inadimplente: boolean) {
+  async definirInadimplencia(id: number, inadimplente: boolean, operadorId?: string) {
     await this.buscarEmpresaPorId(id);
-    return this.prisma.empresa.update({
-      where: { id },
-      data: { inadimplente, liberacaoFinanceiraAte: null },
+    return this.prisma.$transaction(async tx => {
+      const empresa = await tx.empresa.update({
+        where: { id }, data: { inadimplente, liberacaoFinanceiraAte: null },
+      });
+      if (operadorId) await tx.saasFinanceiroEvento.create({
+        data: { empresaId: id, operadorId,
+          acao: inadimplente ? 'BLOQUEIO_FINANCEIRO' : 'DESBLOQUEIO_FINANCEIRO',
+          descricao: inadimplente ? 'Bloqueio por inadimplência aplicado' : 'Bloqueio financeiro removido' },
+      });
+      return empresa;
     });
   }
 
@@ -334,6 +353,10 @@ export class SaasService {
     return this.prisma.$transaction(async tx => {
       await tx.saasLiberacaoAcesso.create({
         data: { empresaId: id, operadorId, dias, motivo: motivo.trim(), liberadoAte },
+      });
+      await tx.saasFinanceiroEvento.create({
+        data: { empresaId: id, operadorId, acao: 'LIBERACAO_TEMPORARIA',
+          descricao: dias + ' dias até ' + liberadoAte.toISOString() + ' · ' + motivo.trim() },
       });
       return tx.empresa.update({ where: { id }, data: { liberacaoFinanceiraAte: liberadoAte } });
     });
