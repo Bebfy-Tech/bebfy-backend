@@ -76,16 +76,54 @@ export class SaasAuthService {
     return this.publicUser(atualizado);
   }
 
-  async atualizar(id: string, input: { codigo?: number; nome?: string; senha?: string; permissoes?: string[]; ativo?: boolean }) {
-    const existing = await this.prisma.saasOperador.findUnique({ where: { id } });
+  async atualizar(id: string, input: { codigo?: number; nome?: string; email?: string; senha?: string; senhaAtualAdmin?: string; permissoes?: string[]; ativo?: boolean }, operadorId: string) {
+    const [existing, actor] = await Promise.all([
+      this.prisma.saasOperador.findUnique({ where: { id } }),
+      this.prisma.saasOperador.findUnique({ where: { id: operadorId } }),
+    ]);
     if (!existing) throw new BadRequestException('Funcionário não encontrado.');
-    if (existing.cargo === SaasCargo.SUPER_ADMIN) throw new ForbiddenException('Superadministradores são geridos somente por provisionamento seguro.');
-    if (input.permissoes?.some(p => !SAAS_PERMISSIONS.includes(p as SaasPermission))) throw new BadRequestException('Permissão inválida.');
-
+    if (!actor?.ativo) throw new UnauthorizedException('Sessão administrativa inválida.');
+    if (input.permissoes?.some(p => !SAAS_PERMISSIONS.includes(p as SaasPermission))) {
+      throw new BadRequestException('Permissão inválida.');
+    }
+    const nome = input.nome?.trim();
+    if (input.nome !== undefined && (!nome || nome.length < 2)) {
+      throw new BadRequestException('O nome precisa ter ao menos 2 caracteres.');
+    }
+    const email = input.email?.trim().toLowerCase();
+    if (existing.cargo === SaasCargo.SUPER_ADMIN) {
+      if (actor.cargo !== SaasCargo.SUPER_ADMIN) {
+        throw new ForbiddenException('Apenas um superadministrador pode editar um superadministrador.');
+      }
+      // Preserve the two reserved identifiers and privileged, active accounts.
+      if (existing.codigo !== 1 && existing.codigo !== 2) {
+        throw new ForbiddenException('Este superadministrador exige atualização por provisionamento seguro.');
+      }
+      if (input.codigo !== undefined && input.codigo !== existing.codigo) {
+        throw new BadRequestException('Os códigos principais 1 e 2 não podem ser alterados.');
+      }
+      if (input.ativo === false || input.permissoes !== undefined) {
+        throw new ForbiddenException('Não é permitido desativar ou restringir os administradores principais.');
+      }
+      // Only the account holder can change their own password through Meu Perfil,
+      // which verifies their current password and revokes the active session.
+      if (input.senha !== undefined) {
+        throw new ForbiddenException('A senha dos administradores principais deve ser alterada em Meu perfil.');
+      }
+      const user = await this.prisma.saasOperador.update({
+        where: { id },
+        data: {
+          ...(nome !== undefined ? { nome } : {}),
+          ...(input.email !== undefined ? { email: email || null } : {}),
+        },
+      });
+      return this.publicUser(user);
+    }
     const user = await this.prisma.saasOperador.update({
       where: { id },
       data: {
-        ...(input.nome !== undefined ? { nome: input.nome.trim() } : {}),
+        ...(nome !== undefined ? { nome } : {}),
+        ...(input.email !== undefined ? { email: email || null } : {}),
         ...(input.codigo !== undefined ? { codigo: input.codigo } : {}),
         ...(input.permissoes !== undefined ? { permissoes: input.permissoes } : {}),
         ...(input.ativo !== undefined ? { ativo: input.ativo, sessaoId: null } : {}),
