@@ -100,13 +100,13 @@ export class SaasController {
   @Patch('empresas/:id/cobrancas/:cobrancaId/pagamento')
   marcarPagamento(
     @Param('id', ParseIntPipe) id: number, @Param('cobrancaId') cobrancaId: string,
-    @Body() dto: MarcarPagamentoSaasDto,
-  ) { return this.saasService.marcarPagamento(id, cobrancaId, dto.pago); }
+    @Req() req: any, @Body() dto: MarcarPagamentoSaasDto,
+  ) { return this.saasService.marcarPagamento(id, cobrancaId, dto.pago, req.saasUser.id); }
 
   @UseGuards(SaasPermissionGuard('EMPRESAS'))
   @Patch('empresas/:id/inadimplencia')
-  definirInadimplencia(@Param('id', ParseIntPipe) id: number, @Body() dto: DefinirInadimplenciaDto) {
-    return this.saasService.definirInadimplencia(id, dto.inadimplente);
+  definirInadimplencia(@Param('id', ParseIntPipe) id: number, @Req() req: any, @Body() dto: DefinirInadimplenciaDto) {
+    return this.saasService.definirInadimplencia(id, dto.inadimplente, req.saasUser.id);
   }
 
   @UseGuards(SaasPermissionGuard('EMPRESAS'))
