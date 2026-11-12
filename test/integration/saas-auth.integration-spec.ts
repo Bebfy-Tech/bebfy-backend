@@ -302,4 +302,51 @@ describe('SaaS: administradores independentes das distribuidoras', () => {
     expect(invalid.status).toBe(400);
   });
 
+  it('oculta módulos desativados na consulta do tenant e bloqueia suas APIs mesmo com sessão válida', async () => {
+    const server=app.getHttpServer();
+    expect(reusedAdminToken).toBeTruthy();
+    const company=await db.empresa.update({
+      where:{id:sampleCompanyId},
+      data:{status:'ATIVA',inadimplente:false,liberacaoFinanceiraAte:null},
+    });
+    const passwordTenant='QA-module-'+randomUUID();
+    const employee=await db.funcionario.create({
+      data:{empresaId:sampleCompanyId,codigo:31,nome:'QA Modulos',cpf:'33344455566',cargo:'PROPRIETARIO',
+        usuario:{create:{email:'modulo-'+randomUUID().slice(0,12)+'@bebfy.invalid',
+          senha:await bcrypt.hash(passwordTenant,12),permissoes:[],primeiroAcesso:false}}},
+    });
+    try {
+      const login=await request(server).post('/auth/login')
+        .set('x-tenant',company.slug).send({login:'31',senha:passwordTenant});
+      expect(login.status).toBe(200);
+      const tenantToken={Authorization:'Bearer '+login.body.access_token,'x-tenant':company.slug};
+      const adminToken={Authorization:'Bearer '+reusedAdminToken};
+      const setting='/saas/admin/empresas/'+company.id+'/modulos';
+      const initial=await request(server).get('/auth/modulos').set(tenantToken);
+      expect(initial.status).toBe(200);
+      expect(initial.body.modulos.FIADOS).toBeUndefined();
+
+      const disabled=await request(server).patch(setting).set(adminToken)
+        .send({modulo:'FIADOS',ativo:false});
+      expect(disabled.status).toBe(200);
+      const state=await request(server).get('/auth/modulos').set(tenantToken);
+      expect(state.status).toBe(200);
+      expect(state.body.modulos.FIADOS).toBe(false);
+      expect((await request(server).get('/fiados').set(tenantToken)).status).toBe(403);
+
+      const deliveryDisabled=await request(server).patch(setting).set(adminToken)
+        .send({modulo:'ENTREGAS_DELIVERY',ativo:false});
+      expect(deliveryDisabled.status).toBe(200);
+      expect((await request(server).get('/vendas/pendentes-acerto-delivery').set(tenantToken)).status).toBe(403);
+
+      const restored=await request(server).patch(setting).set(adminToken)
+        .send({modulo:'FIADOS',ativo:true});
+      expect(restored.status).toBe(200);
+      expect((await request(server).get('/auth/modulos').set(tenantToken)).body.modulos.FIADOS).toBe(true);
+      expect((await request(server).get('/fiados').set(tenantToken)).status).toBe(200);
+    } finally {
+      await db.funcionario.delete({where:{id:employee.id}});
+    }
+  });
+
 });
