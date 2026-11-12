@@ -70,6 +70,44 @@ describe('SaaS: administradores independentes das distribuidoras', () => {
     expect(disabled.status).toBe(200);
     expect((await request(server).get('/saas/admin/empresas').set(employeeBearer)).status).toBe(401);
   });
+  it('permite editar nome e e-mail do administrador principal sem alterar código, senha ou permissões', async () => {
+    const server = app.getHttpServer();
+    const codeOne = await db.saasOperador.findUnique({ where: { codigo: 1 } });
+    // This suite only modifies temporary QA records, never existing operators.
+    if (codeOne) return;
+    const primary = await db.saasOperador.create({
+      data: { codigo: 1, nome: 'Administrador 1 QA', senha: await bcrypt.hash(password, 12),
+        cargo: SaasCargo.SUPER_ADMIN, permissoes: ['EMPRESAS','PLANOS','MODULOS','FUNCIONARIOS'] },
+    });
+    try {
+      const auth = await request(server).post('/saas/auth/login').send({ codigo: code, senha: password });
+      expect(auth.status).toBe(200);
+      const token = { Authorization: 'Bearer ' + auth.body.access_token };
+      const path = '/saas/admin/funcionarios/' + primary.id;
+      const updated = await request(server).patch(path).set(token)
+        .send({ nome: 'Administrador Principal QA', email: 'principal-qa-' + randomUUID() + '@bebfy.invalid' });
+      expect(updated.status).toBe(200);
+      expect(updated.body.nome).toBe('Administrador Principal QA');
+      expect(updated.body.email).toContain('@bebfy.invalid');
+      expect(updated.body.senha).toBeUndefined();
+      const forbiddenCode = await request(server).patch(path).set(token).send({ codigo: 3 });
+      expect(forbiddenCode.status).toBe(400);
+      const forbiddenDisable = await request(server).patch(path).set(token).send({ ativo: false });
+      expect(forbiddenDisable.status).toBe(403);
+      const forbiddenPermissions = await request(server).patch(path).set(token).send({ permissoes: [] });
+      expect(forbiddenPermissions.status).toBe(403);
+      const forbiddenPassword = await request(server).patch(path).set(token).send({ senha: 'outra' });
+      expect(forbiddenPassword.status).toBe(403);
+      const after = await db.saasOperador.findUniqueOrThrow({ where: { id: primary.id } });
+      expect(after.codigo).toBe(1);
+      expect(after.ativo).toBe(true);
+      expect(after.cargo).toBe(SaasCargo.SUPER_ADMIN);
+      expect(await bcrypt.compare(password, after.senha)).toBe(true);
+    } finally {
+      await db.saasOperador.delete({ where: { id: primary.id } });
+    }
+  });
+
   it('bloqueia inadimplência, libera prazo e preserva suspensão manual', async () => {
     const server = app.getHttpServer();
     const slug = 'saas-grace-' + randomUUID().slice(0, 8);
