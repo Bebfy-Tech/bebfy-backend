@@ -177,7 +177,7 @@ export class SaasService {
       data: {
         empresaId: dto.empresaId, titulo: dto.titulo.trim(), descricao: dto.descricao.trim(),
         contatoNome: dto.contatoNome?.trim() || null,
-        contatoTelefone: dto.contatoTelefone?.replace(/\\D/g, '') || null,
+        contatoTelefone: dto.contatoTelefone?.replace(/\D/g, '') || null,
         categoria: dto.categoria || 'DUVIDA',
         prioridade: dto.prioridade || 'NORMAL',
         status: 'PENDENTE', responsavelId: dto.responsavelId || operadorId,
@@ -213,7 +213,7 @@ export class SaasService {
           ...(dto.titulo !== undefined ? { titulo: dto.titulo.trim() } : {}),
           ...(dto.descricao !== undefined ? { descricao: dto.descricao.trim() } : {}),
           ...(dto.contatoNome !== undefined ? { contatoNome: dto.contatoNome.trim() || null } : {}),
-          ...(dto.contatoTelefone !== undefined ? { contatoTelefone: dto.contatoTelefone.replace(/\\D/g, '') || null } : {}),
+          ...(dto.contatoTelefone !== undefined ? { contatoTelefone: dto.contatoTelefone.replace(/\D/g, '') || null } : {}),
           ...(dto.categoria !== undefined ? { categoria: dto.categoria } : {}),
           ...(dto.prioridade !== undefined ? { prioridade: dto.prioridade } : {}),
           ...(dto.responsavelId !== undefined ? { responsavelId: dto.responsavelId || null } : {}),
