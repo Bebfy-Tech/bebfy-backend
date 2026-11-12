@@ -352,16 +352,23 @@ export class SaasService {
     });
   }
 
-  async criarCobranca(empresaId: number, dto: CriarCobrancaSaasDto) {
+  async criarCobranca(empresaId: number, dto: CriarCobrancaSaasDto, operadorId?: string) {
     await this.buscarEmpresaPorId(empresaId);
-    const data=new Date(dto.vencimento);
-    if(Number.isNaN(data.getTime()))throw new BadRequestException('Vencimento inválido.');
-    return this.prisma.saasCobranca.create({
-      data: {
-        empresaId, referencia:dto.referencia.trim(), valor:dto.valor,
-        vencimento:data, linhaDigitavel:dto.linhaDigitavel?.trim()||null,
-        observacao:dto.observacao?.trim()||null,
-      },
+    const data = new Date(dto.vencimento);
+    if (Number.isNaN(data.getTime())) throw new BadRequestException('Vencimento inválido.');
+    return this.prisma.$transaction(async tx => {
+      const cobranca = await tx.saasCobranca.create({
+        data: {
+          empresaId, referencia: dto.referencia.trim(), valor: dto.valor,
+          vencimento: data, linhaDigitavel: dto.linhaDigitavel?.trim() || null,
+          observacao: dto.observacao?.trim() || null,
+        },
+      });
+      if (operadorId) await tx.saasFinanceiroEvento.create({
+        data: { empresaId, operadorId, acao: 'COBRANCA_CRIADA',
+          descricao: 'Cobrança ' + cobranca.referencia + ' no valor de R$ ' + dto.valor.toFixed(2) },
+      });
+      return cobranca;
     });
   }
 
