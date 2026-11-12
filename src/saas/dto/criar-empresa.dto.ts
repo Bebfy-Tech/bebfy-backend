@@ -5,7 +5,7 @@ export class CriarEmpresaDto {
   @IsNotEmpty({ message: 'O nome da empresa é obrigatório.' })
   nome: string;
 
-  @IsString({ message: 'O documento (CNPJ) deve ser um texto.' })
+  @IsString({ message: 'O documento (CPF ou CNPJ) deve ser um texto.' })
   @IsNotEmpty({ message: 'O documento (CNPJ) é obrigatório.' })
   documento: string;
 
