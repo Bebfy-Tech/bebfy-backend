@@ -3,6 +3,7 @@ import { PrismaService } from '../core/prisma/prisma.service';
 import { StatusEmpresa, NomeModulo } from '@prisma/client';
 import { CriarEmpresaDto } from './dto/criar-empresa.dto';
 import { CriarCobrancaSaasDto } from './dto/cobranca-saas.dto';
+import { RegistrarPagamentoSaasDto } from './dto/registrar-pagamento-saas.dto';
 import { AtualizarEmpresaSaasDto } from './dto/atualizar-empresa-saas.dto';
 import { CriarPlanoDto, AtualizarPlanoDto } from './dto/criar-plano.dto';
 import * as bcrypt from 'bcrypt';
@@ -203,6 +204,85 @@ export class SaasService {
             select: { id: true, codigo: true, nome: true, cpf: true, telefone: true,
               usuario: { select: { email: true, ativo: true } } } } },
       });
+    });
+  }
+
+  // Consolidated data for the SaaS administrative finance center. All access is
+  // guarded by EMPRESAS in the controller; no tenant can call these endpoints.
+  async listarFinanceiro() {
+    const [empresas, cobrancas] = await Promise.all([
+      this.prisma.empresa.findMany({
+        select: { id: true, nomeFantasia: true, slug: true, status: true,
+          inadimplente: true, liberacaoFinanceiraAte: true,
+          plano: { select: { nome: true, precoMensal: true } } },
+        orderBy: { nomeFantasia: 'asc' },
+      }),
+      this.prisma.saasCobranca.findMany({
+        include: { pagamentos: { orderBy: { pagoEm: 'desc' } } },
+        orderBy: { vencimento: 'desc' },
+      }),
+    ]);
+    const now = Date.now();
+    const resultado = cobrancas.map(c => {
+      const valorCentavos = Math.round(Number(c.valor) * 100);
+      const recebidoCentavos = c.pagamentos.length
+        ? c.pagamentos.reduce((sum, p) => sum + Math.round(Number(p.valor) * 100), 0)
+        : c.pagoEm ? valorCentavos : 0;
+      const saldoCentavos = Math.max(0, valorCentavos - recebidoCentavos);
+      const status = saldoCentavos === 0 ? 'PAGO'
+        : new Date(c.vencimento).getTime() < now ? 'VENCIDO'
+        : recebidoCentavos ? 'PARCIAL' : 'PENDENTE';
+      return { ...c, valor: Number(c.valor), recebido: recebidoCentavos / 100,
+        saldo: saldoCentavos / 100, status,
+        pagamentos: c.pagamentos.map(p => ({ ...p, valor: Number(p.valor) })) };
+    });
+    return { empresas, cobrancas: resultado };
+  }
+
+  async historicoFinanceiro(empresaId: number) {
+    await this.buscarEmpresaPorId(empresaId);
+    return this.prisma.saasFinanceiroEvento.findMany({
+      where: { empresaId }, orderBy: { criadoEm: 'desc' }, take: 100,
+    });
+  }
+
+  async registrarPagamento(empresaId: number, cobrancaId: string, operadorId: string, dto: RegistrarPagamentoSaasDto) {
+    const pagoEm = new Date(dto.pagoEm);
+    if (Number.isNaN(pagoEm.getTime()) || pagoEm.getTime() > Date.now() + 86400000) {
+      throw new BadRequestException('Data de pagamento inválida.');
+    }
+    if (!dto.forma.trim()) throw new BadRequestException('Informe a forma de pagamento.');
+    const valorCentavos = Math.round(dto.valor * 100);
+    if (!Number.isSafeInteger(valorCentavos) || valorCentavos <= 0) throw new BadRequestException('Valor inválido.');
+    return this.prisma.$transaction(async tx => {
+      // Row lock prevents concurrent payment requests from exceeding the charge.
+      await tx.$queryRaw`SELECT "id" FROM "saas_cobrancas"
+        WHERE "id" = ${cobrancaId} AND "empresaId" = ${empresaId} FOR UPDATE`;
+      const cobranca = await tx.saasCobranca.findFirst({
+        where: { id: cobrancaId, empresaId },
+        include: { pagamentos: true },
+      });
+      if (!cobranca) throw new NotFoundException('Cobrança não encontrada nesta distribuidora.');
+      if (cobranca.pagoEm && !cobranca.pagamentos.length) {
+        throw new ConflictException('Cobrança já quitada no controle anterior. Não registre pagamento duplicado.');
+      }
+      const totalCentavos = Math.round(Number(cobranca.valor) * 100);
+      const recebido = cobranca.pagamentos.reduce((n, p) => n + Math.round(Number(p.valor) * 100), 0);
+      if (valorCentavos > totalCentavos - recebido) {
+        throw new BadRequestException('Pagamento excede o saldo restante da cobrança.');
+      }
+      const pagamento = await tx.saasPagamento.create({
+        data: { cobrancaId, valor: dto.valor, pagoEm, forma: dto.forma.trim(),
+          observacao: dto.observacao?.trim() || null, operadorId },
+      });
+      if (recebido + valorCentavos === totalCentavos) {
+        await tx.saasCobranca.update({ where: { id: cobrancaId }, data: { pagoEm } });
+      }
+      await tx.saasFinanceiroEvento.create({
+        data: { empresaId, operadorId, acao: 'PAGAMENTO_REGISTRADO',
+          descricao: 'Pagamento de R$ ' + dto.valor.toFixed(2) + ' registrado na cobrança ' + cobranca.referencia },
+      });
+      return { ...pagamento, valor: Number(pagamento.valor) };
     });
   }
 
