@@ -178,7 +178,7 @@ export class SaasService {
     if (!mime) throw new BadRequestException('O suporte aceita somente PDF, JPG e PNG válidos.');
     const ext = pdf ? '.pdf' : png ? '.png' : '.jpg';
     const safeName = (file.originalname || 'evidencia').replace(/[^a-zA-Z0-9._ -]/g, '_').slice(0, 120);
-    const nome = safeName.replace(/\\.[a-zA-Z0-9]{1,5}$/, '') + ext;
+    const nome = safeName.replace(/\.[a-zA-Z0-9]{1,5}$/, '') + ext;
     return this.prisma.$transaction(async tx => {
       const anexo = await tx.saasChamadoAnexo.create({
         data: { chamadoId, operadorId, nome, mime, tamanho: buffer.length, conteudo: buffer },
