@@ -100,6 +100,13 @@ export class SaasService {
     });
   }
 
+  async listarAuditoria() {
+    return this.prisma.saasAuditoria.findMany({
+      orderBy: { criadoEm: 'desc' }, take: 1000,
+      select: { id: true, operadorId: true, metodo: true, rota: true, campos: true, recursoId: true, criadoEm: true },
+    });
+  }
+
   async listarMonitoramento() {
     const [empresas, usuarios] = await Promise.all([
       this.prisma.empresa.findMany({
