@@ -23,6 +23,30 @@ const RESERVED_SLUGS = new Set([
 export class SaasService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Advisory only: database unique constraints handle concurrent registrations. */
+  async verificarEnderecoEmpresa(raw: string) {
+    const subdominio = raw.trim().toLowerCase();
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(subdominio) || subdominio.length > 60) {
+      throw new BadRequestException('Endereço inválido. Use até 60 caracteres: letras minúsculas, números e hífens internos.');
+    }
+    const existente = await this.prisma.empresa.findFirst({
+      where: { OR: [{ slug: subdominio }, { subdominio }] },
+      select: { id: true },
+    });
+    const reservado = RESERVED_SLUGS.has(subdominio);
+    if (!existente && !reservado) return { subdominio, disponivel: true, sugestoes: [] as string[] };
+    const candidatos = Array.from(new Set([
+      subdominio + '-go', subdominio + '-oficial',
+      ...Array.from({ length: 24 }, (_, i) => subdominio + (i + 2)),
+    ])).filter(s => s.length <= 60 && !RESERVED_SLUGS.has(s));
+    const usados = await this.prisma.empresa.findMany({
+      where: { OR: [{ slug: { in: candidatos } }, { subdominio: { in: candidatos } }] },
+      select: { slug: true, subdominio: true },
+    });
+    const ocupados = new Set(usados.flatMap(e => [e.slug, e.subdominio]));
+    return { subdominio, disponivel: false, sugestoes: candidatos.filter(s => !ocupados.has(s)).slice(0, 3) };
+  }
+
   async criarEmpresa(dto: CriarEmpresaDto) {
     const documento = dto.documento.replace(/\D/g, '');
     const subdominio = dto.subdominio.trim().toLowerCase();
