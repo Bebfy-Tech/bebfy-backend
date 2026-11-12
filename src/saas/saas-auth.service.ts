@@ -76,7 +76,7 @@ export class SaasAuthService {
     return this.publicUser(atualizado);
   }
 
-  async atualizar(id: string, input: { codigo?: number; nome?: string; email?: string; senha?: string; senhaAtualAdmin?: string; permissoes?: string[]; ativo?: boolean }, operadorId: string) {
+  async atualizar(id: string, input: { codigo?: number; nome?: string; email?: string | null; senha?: string; senhaAtualAdmin?: string; permissoes?: string[]; ativo?: boolean }, operadorId: string) {
     const [existing, actor] = await Promise.all([
       this.prisma.saasOperador.findUnique({ where: { id } }),
       this.prisma.saasOperador.findUnique({ where: { id: operadorId } }),
