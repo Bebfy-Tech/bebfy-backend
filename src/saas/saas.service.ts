@@ -100,6 +100,38 @@ export class SaasService {
     });
   }
 
+  async listarMonitoramento() {
+    const [empresas, usuarios] = await Promise.all([
+      this.prisma.empresa.findMany({
+        select: { id: true, nomeFantasia: true, slug: true, status: true,
+          inadimplente: true, criadoEm: true,
+          _count: { select: { funcionarios: true, produtos: true, vendas: true } } },
+        orderBy: { nomeFantasia: 'asc' },
+      }),
+      this.prisma.usuario.findMany({
+        select: { ativo: true, ultimaAtividadeEm: true,
+          funcionario: { select: { empresaId: true } } },
+      }),
+    ]);
+    const porEmpresa = new Map<number, { ativos: number; ultimaAtividade: Date | null; acessosRecentes: number }>();
+    const seteDiasAtras = Date.now() - 7 * 86400000;
+    for (const usuario of usuarios) {
+      const id = usuario.funcionario.empresaId;
+      const row = porEmpresa.get(id) || { ativos: 0, ultimaAtividade: null, acessosRecentes: 0 };
+      if (usuario.ativo) row.ativos++;
+      if (usuario.ultimaAtividadeEm && (!row.ultimaAtividade || row.ultimaAtividade < usuario.ultimaAtividadeEm)) {
+        row.ultimaAtividade = usuario.ultimaAtividadeEm;
+      }
+      if (usuario.ultimaAtividadeEm?.getTime() && usuario.ultimaAtividadeEm.getTime() >= seteDiasAtras) row.acessosRecentes++;
+      porEmpresa.set(id, row);
+    }
+    return empresas.map(e => ({
+      ...e, usuariosAtivos: porEmpresa.get(e.id)?.ativos ?? 0,
+      usuariosRecentes: porEmpresa.get(e.id)?.acessosRecentes ?? 0,
+      ultimoAcesso: porEmpresa.get(e.id)?.ultimaAtividade ?? null,
+    }));
+  }
+
   async listarEmpresasSuporte() {
     return this.prisma.empresa.findMany({
       select: { id: true, nomeFantasia: true, slug: true, status: true },
