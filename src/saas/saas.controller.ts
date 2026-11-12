@@ -14,6 +14,7 @@ import { SaasService } from './saas.service';
 import { SaasAuthGuard, SaasPermissionGuard } from './saas-auth.guard';
 import { AlterarStatusEmpresaDto } from './dto/alterar-status-empresa.dto';
 import { AlternarModuloDto } from './dto/alternar-modulo.dto';
+import { PersonalizarModuloDto } from './dto/personalizar-modulo.dto';
 import { AlterarPlanoDto } from './dto/alterar-plano.dto';
 import { CriarEmpresaDto } from './dto/criar-empresa.dto';
 import { AtualizarEmpresaSaasDto } from './dto/atualizar-empresa-saas.dto';
@@ -68,6 +69,18 @@ export class SaasController {
   @Post('empresas/:id/liberar-acesso')
   liberarAcesso(@Param('id', ParseIntPipe) id: number, @Req() req: any, @Body() dto: LiberarAcessoTemporarioDto) {
     return this.saasService.liberarTemporariamente(id, req.saasUser.id, dto.dias, dto.motivo);
+  }
+
+  @UseGuards(SaasPermissionGuard('MODULOS'))
+  @Get('modulos')
+  listarDescricoesModulos() {
+    return this.saasService.listarDescricoesModulos();
+  }
+
+  @UseGuards(SaasPermissionGuard('MODULOS'))
+  @Patch('modulos/:modulo')
+  personalizarModulo(@Param('modulo') modulo: string, @Body() dto: PersonalizarModuloDto) {
+    return this.saasService.personalizarModulo(modulo, dto);
   }
 
   @UseGuards(SaasPermissionGuard('MODULOS'))
