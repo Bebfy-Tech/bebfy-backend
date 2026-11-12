@@ -83,6 +83,7 @@ model Empresa {
   historicoLiberacoes  SaasLiberacaoAcesso[]
   cobrancasSaas       SaasCobranca[]
   eventosFinanceiros  SaasFinanceiroEvento[]
+  anexosFinanceiros    SaasAnexoFinanceiro[]
   resetSenhaTokens     ResetSenhaToken[]
   planoId              Int?
   plano                Plano?                @relation(fields: [planoId], references: [id])
@@ -136,6 +137,7 @@ model SaasCobranca {
   observacao    String?
   criadoEm      DateTime @default(now())
   pagamentos    SaasPagamento[]
+  anexos        SaasAnexoFinanceiro[]
 
   @@index([empresaId, vencimento])
   @@map("saas_cobrancas")
@@ -153,6 +155,23 @@ model SaasPagamento {
   criadoEm    DateTime @default(now())
   @@index([cobrancaId, criadoEm])
   @@map("saas_pagamentos")
+}
+
+model SaasAnexoFinanceiro {
+  id          String   @id @default(uuid())
+  empresaId   Int
+  empresa     Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  cobrancaId  String?
+  cobranca    SaasCobranca? @relation(fields: [cobrancaId], references: [id], onDelete: Cascade)
+  tipo        String
+  nome        String
+  mime        String
+  conteudo    Bytes    @db.ByteA
+  tamanho     Int
+  operadorId  String
+  criadoEm    DateTime @default(now())
+  @@index([empresaId, criadoEm])
+  @@map("saas_anexos_financeiros")
 }
 
 model SaasFinanceiroEvento {
