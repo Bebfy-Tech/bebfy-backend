@@ -125,6 +125,7 @@ model Plano {
   tipo        TipoPlano  @default(VAREJO_BASICO)
   precoMensal Decimal    @db.Decimal(10, 2)
   empresas    Empresa[]
+  modulosPadrao NomeModulo[] @default([])
   criadoEm    DateTime   @default(now())
 
   @@map("planos")
