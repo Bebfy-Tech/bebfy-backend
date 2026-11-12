@@ -2,7 +2,7 @@ name: Bebfy Backend CI
 
 on:
   push:
-    branches: [main, refactor/backend-stabilization, refactor/codigo-chatgpt]
+    branches: [main, refactor/backend-stabilization, refactor/codigo-chatgpt, refactor/codigo-chatgpt-2]
   pull_request:
     branches: [main]
 
