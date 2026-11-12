@@ -18,6 +18,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { AnexoFinanceiroDto } from './dto/anexo-financeiro.dto';
 import { CriarChamadoSaasDto, AtualizarChamadoSaasDto, RegistrarInteracaoSaasDto } from './dto/chamado-saas.dto';
+import { ConfigurarRecorrenciaSaasDto, GerarMensalidadesSaasDto } from './dto/recorrencia-saas.dto';
 import { SaasAuthGuard, SaasPermissionGuard } from './saas-auth.guard';
 import { AlterarStatusEmpresaDto } from './dto/alterar-status-empresa.dto';
 import { AlternarModuloDto } from './dto/alternar-modulo.dto';
@@ -74,6 +75,18 @@ export class SaasController {
   @Post('suporte/chamados/:id/interacoes')
   registrarInteracao(@Param('id') id: string, @Req() req: any, @Body() dto: RegistrarInteracaoSaasDto) {
     return this.saasService.registrarInteracaoChamado(id, req.saasUser.id, dto.mensagem);
+  }
+
+  @UseGuards(SaasPermissionGuard('EMPRESAS'))
+  @Patch('financeiro/empresas/:id/recorrencia')
+  configurarRecorrencia(@Param('id', ParseIntPipe) id: number, @Req() req: any, @Body() dto: ConfigurarRecorrenciaSaasDto) {
+    return this.saasService.configurarRecorrencia(id, req.saasUser.id, dto.recorrente, dto.diaVencimento);
+  }
+
+  @UseGuards(SaasPermissionGuard('EMPRESAS'))
+  @Post('financeiro/gerar-mensalidades')
+  gerarMensalidades(@Req() req: any, @Body() dto: GerarMensalidadesSaasDto) {
+    return this.saasService.gerarMensalidades(dto.competencia, req.saasUser.id);
   }
 
   @UseGuards(SaasPermissionGuard('EMPRESAS'))
