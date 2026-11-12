@@ -318,8 +318,8 @@ export class SaasService {
       if (!belongs) throw new BadRequestException('Cobrança não pertence a esta distribuidora.');
     }
     const ext = pdf ? '.pdf' : png ? '.png' : '.jpg';
-    const supplied = (file.originalname || 'documento').replace(/[\\/\\\\\\x00-\\x1f]/g, '_').trim().slice(0, 140);
-    const base = supplied.replace(/\\.[a-zA-Z0-9]{1,5}$/, '').replace(/[^\\p{L}\\p{N} ._()-]/gu, '_') || 'documento';
+    const supplied = (file.originalname || 'documento').replace(/[\/\\\x00-\x1f]/g, '_').trim().slice(0, 140);
+    const base = supplied.replace(/\.[a-zA-Z0-9]{1,5}$/, '').replace(/[^\p{L}\p{N} ._()-]/gu, '_') || 'documento';
     const name = base + ext;
     return this.prisma.$transaction(async tx => {
       const created = await tx.saasAnexoFinanceiro.create({
