@@ -37,6 +37,12 @@ import { CriarPlanoDto, AtualizarPlanoDto } from './dto/criar-plano.dto';
 export class SaasController {
   constructor(private readonly saasService: SaasService) {}
 
+  @UseGuards(SaasPermissionGuard('FUNCIONARIOS'))
+  @Get('auditoria')
+  listarAuditoria() {
+    return this.saasService.listarAuditoria();
+  }
+
   @UseGuards(SaasPermissionGuard('EMPRESAS'))
   @Get('monitoramento')
   listarMonitoramento() {
