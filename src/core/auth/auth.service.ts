@@ -164,7 +164,7 @@ export class AuthService {
     if(!empresaId)throw new UnauthorizedException('Distribuidora não identificada.');
     if(dto.novaSenha!==dto.confirmarNovaSenha)throw new BadRequestException('Confirmação da senha não corresponde.');
     const hash=createHash('sha256').update(dto.token).digest('hex');
-    const token=await this.prisma.resetSenhaToken.findUnique({where:{tokenHash}});
+    const token=await this.prisma.resetSenhaToken.findUnique({where:{tokenHash:hash}});
     if(!token || token.empresaId!==empresaId || token.usadoEm || token.expiraEm.getTime()<Date.now())
       throw new UnauthorizedException('Link de recuperação inválido ou expirado.');
     const user=await this.prisma.usuario.findUnique({
