@@ -179,6 +179,15 @@ describe('HTTP contracts: React frontend / backend multi-tenant', () => {
     expect(painel.body.vendasUltimos7Dias[6].quantidade).toBe(1);
     expect(painel.body.pagamentosMes).toEqual([{ formaPagamento: 'DINHEIRO', valor: 20 }]);
     expect(painel.body.totalClientesDevedores).toBe(0);
+    expect(painel.body.vendasHorasHoje).toHaveLength(12);
+    expect(painel.body.vendasHorasHoje.reduce((a:number,d:{faturamento:number})=>a+d.faturamento,0)).toBe(20);
+    expect(painel.body.pagamentosHoje).toEqual([{formaPagamento:'DINHEIRO',valor:20}]);
+    expect(painel.body.pagamentos7Dias).toEqual([{formaPagamento:'DINHEIRO',valor:20}]);
+    expect(typeof painel.body.alertas.estoqueBaixo).toBe('number');
+    const operacional = await request(app.getHttpServer()).get('/relatorios/dashboard/operacional').set(headers);
+    expect(operacional.status).toBe(200);
+    expect(operacional.body.caixaAberto).toBe(true);
+    expect(operacional.body.faturamentoHoje).toBeUndefined();
     const extrato = await request(app.getHttpServer()).get('/caixa/' + caixaId + '/extrato').set(headers);
     expect(extrato.status).toBe(200);
     expect(extrato.body.totalVendas).toBe(20);

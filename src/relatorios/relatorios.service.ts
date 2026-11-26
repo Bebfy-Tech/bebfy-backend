@@ -122,6 +122,20 @@ export class RelatoriosService {
           return { data: diaLocal(inicio), faturamento: Number(vendas._sum.valorTotal || 0), quantidade: vendas._count.id };
         })));
       }
+      // Two-hour intervals for today's chart. Do not expose individual transactions.
+      const vendasHorasHoje: Array<{ data: string; faturamento: number; quantidade: number }> = [];
+      for (let batch = 0; batch < 12; batch += 4) {
+        vendasHorasHoje.push(...await Promise.all(Array.from({length:4},async (_, offset)=>{
+          const hora=(batch+offset)*2;
+          const inicio=new Date(hojeInicio); inicio.setHours(hora);
+          const fim=new Date(hojeInicio); fim.setHours(hora+2);
+          const v=await this.prisma.venda.aggregate({
+            where:{empresaId,status:StatusVenda.CONCLUIDA,criadoEm:{gte:inicio,lt:fim}},
+            _sum:{valorTotal:true},_count:{id:true},
+          });
+          return {data:String(hora).padStart(2,'0')+'h',faturamento:Number(v._sum.valorTotal||0),quantidade:v._count.id};
+        })));
+      }
       const vendasUltimos7Dias = serie.filter(d => d.data >= diaLocal(inicioSemana));
       const vendasDiasMes = serie.filter(d => d.data >= diaLocal(inicioMes));
 
@@ -150,18 +164,22 @@ export class RelatoriosService {
         this.prisma.loteProduto.count({ where: { ...loteBase, dataVencimento: { gte: hojeInicio, lt: limiteValidade } } }),
       ]) : [null,null];
 
+      const [entregasPendentes, clientesComVasilhames] = await Promise.all([
+        modulos.ENTREGAS_DELIVERY && modulos.CAIXA_PDV ? this.prisma.venda.count({where:{empresaId,status:StatusVenda.CONCLUIDA,tipoEntrega:'DELIVERY',statusAcerto:'PENDENTE'}}) : Promise.resolve(null),
+        modulos.VASILHAMES_RETORNAVEIS ? this.prisma.cliente.count({where:{empresaId,ativo:true,cascosEmPosse:{gt:0}}}) : Promise.resolve(null),
+      ]);
       return {
-        vendasUltimos7Dias, vendasDiasMes,
+        vendasHorasHoje, vendasUltimos7Dias, vendasDiasMes,
         pagamentosHoje, pagamentos7Dias, pagamentosMes,
-        alertas: { estoqueBaixo, lotesVencidos, lotesAVencer },
+        alertas: { estoqueBaixo, lotesVencidos, lotesAVencer, entregasPendentes, clientesComVasilhames },
         faturamentoHoje: Number(vendasHoje._sum.valorTotal || 0),
         totalVendasHoje: vendasHoje._count.id,
         faturamentoMes: Number(vendasMes._sum.valorTotal || 0),
         totalVendasMes: vendasMes._count.id,
-        totalFiadoAReceber: Number(fiadosPendentes._sum.saldoDevedor || 0),
-        totalClientesDevedores: fiadosPendentes._count.id,
+        totalFiadoAReceber: modulos.FIADOS ? Number(fiadosPendentes._sum.saldoDevedor || 0) : 0,
+        totalClientesDevedores: modulos.FIADOS ? fiadosPendentes._count.id : 0,
         topProdutosMaisVendidos: topProdutosDetalhados,
-        caixasAtivos: caixasAbertos,
+        caixasAtivos: modulos.CAIXA_PDV ? caixasAbertos : [],
       };
     } catch (error: any) {
       console.error('Erro ao gerar Dashboard:', error);
@@ -169,5 +187,14 @@ export class RelatoriosService {
         `Erro ao consultar dados do Dashboard: ${error?.message || error}`,
       );
     }
+  }
+  // Operational dashboard contains no tenant-wide financial totals.
+  async getOperacional(empresaId:number, funcionarioId:string) {
+    const modulos=await consultarModulos(this.prisma,empresaId);
+    const [estoqueBaixo,caixa] = await Promise.all([
+      this.prisma.produto.count({where:{empresaId,ativo:true,estoqueAtual:{lte:this.prisma.produto.fields.estoqueMinimo}}}),
+      modulos.CAIXA_PDV ? this.prisma.caixa.findFirst({where:{empresaId,operadorId:funcionarioId,status:StatusCaixa.ABERTO},select:{id:true,abertoEm:true}}) : Promise.resolve(null),
+    ]);
+    return {estoqueBaixo, caixaAberto: Boolean(caixa), caixaAbertoEm: caixa?.abertoEm??null};
   }
 }
