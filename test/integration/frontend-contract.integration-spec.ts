@@ -113,6 +113,24 @@ describe('HTTP contracts: React frontend / backend multi-tenant', () => {
     expect(produtos.body.some((p: { id: number }) => p.id === produtoId)).toBe(true);
   });
 
+  it('salva e remove a foto JPEG de um produto somente na empresa autorizada', async () => {
+    const headers = { 'x-tenant': slug, Authorization: 'Bearer ' + token };
+    const endpoint = '/produtos/' + produtoId + '/foto';
+    const base64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAACAAIDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAwb/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCNAGjX/9k=';
+    expect((await request(app.getHttpServer()).get(endpoint).set(headers)).body.base64).toBeNull();
+    expect((await request(app.getHttpServer()).put(endpoint).set(headers).send({base64:'bm90LWEtanBlZw=='})).status).toBe(400);
+    expect((await request(app.getHttpServer()).put(endpoint).set(headers).send({base64})).status).toBe(200);
+    expect((await request(app.getHttpServer()).get(endpoint).set(headers)).body.base64).toBe(base64);
+    expect((await request(app.getHttpServer()).get(endpoint).set({...headers,'x-tenant':outroSlug})).status).toBe(401);
+    const outraEmpresa = await prisma.empresa.findUniqueOrThrow({where:{slug:outroSlug}});
+    const outroProduto = await prisma.produto.create({data:{empresaId:outraEmpresa.id,nome:'Foto isolada',precoVendaVarejo:1}});
+    const outraFoto = '/produtos/' + outroProduto.id + '/foto';
+    expect((await request(app.getHttpServer()).put(outraFoto).set(headers).send({base64})).status).toBe(404);
+    expect((await request(app.getHttpServer()).get(outraFoto).set(headers)).status).toBe(404);
+    expect((await request(app.getHttpServer()).delete(endpoint).set(headers)).status).toBe(200);
+    expect((await request(app.getHttpServer()).get(endpoint).set(headers)).body.base64).toBeNull();
+  });
+
   it('impede token da loja A em host/cabeçalho da loja B', async () => {
     const response = await request(app.getHttpServer())
       .get('/auth/perfil').set('x-tenant', outroSlug)
