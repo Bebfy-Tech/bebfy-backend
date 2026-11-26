@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../core/prisma/prisma.service';
 import { StatusEmpresa, NomeModulo } from '@prisma/client';
+import { MODULOS_PADRAO, MODULOS_IMPLEMENTADOS } from '../common/modulos/plano-modulos';
 import { CriarEmpresaDto } from './dto/criar-empresa.dto';
 import { CriarCobrancaSaasDto } from './dto/cobranca-saas.dto';
 import { RegistrarPagamentoSaasDto } from './dto/registrar-pagamento-saas.dto';
@@ -85,13 +86,7 @@ export class SaasService {
           status: StatusEmpresa.EM_TESTE,
         },
       });
-      // Defaults are saved as explicit access records, so existing module guards keep working.
-      if (plano.modulosPadrao.length) {
-        await tx.empresaModulo.createMany({
-          data: plano.modulosPadrao.map(modulo => ({ empresaId: empresa.id, modulo, ativo: true })),
-          skipDuplicates: true,
-        });
-      }
+      // Plan modules are inherited; EmpresaModulo stores only manual exceptions.
       await tx.configGlobal.create({
         data: {
           empresaId: empresa.id,
@@ -740,6 +735,7 @@ export class SaasService {
 
   async alternarModuloEmpresa(empresaId: number, modulo: NomeModulo, ativo: boolean) {
     await this.buscarEmpresaPorId(empresaId);
+    if (ativo && !MODULOS_IMPLEMENTADOS.includes(modulo)) throw new BadRequestException('Módulo ainda não disponível para operação.');
 
     return this.prisma.empresaModulo.upsert({
       where: {
@@ -758,14 +754,17 @@ export class SaasService {
   }
 
   async criarPlano(dto: CriarPlanoDto) {
+    const modulos = dto.modulosPadrao ?? MODULOS_PADRAO[dto.tipo];
+    if (modulos.some(m => !MODULOS_IMPLEMENTADOS.includes(m))) throw new BadRequestException('Selecione apenas módulos disponíveis.');
     return this.prisma.plano.create({
-      data: { nome: dto.nome, tipo: dto.tipo, precoMensal: dto.precoMensal, modulosPadrao: dto.modulosPadrao ?? [] },
+      data: { nome: dto.nome, tipo: dto.tipo, precoMensal: dto.precoMensal, modulosPadrao: modulos },
     });
   }
 
   async atualizarPlano(id: number, dto: AtualizarPlanoDto) {
     const existe = await this.prisma.plano.findUnique({ where: { id } });
     if (!existe) throw new NotFoundException('Plano não encontrado.');
+    if (dto.modulosPadrao?.some(m => !MODULOS_IMPLEMENTADOS.includes(m))) throw new BadRequestException('Selecione apenas módulos disponíveis.');
     return this.prisma.plano.update({
       where: { id },
       data: { ...(dto.nome !== undefined ? { nome: dto.nome } : {}),
@@ -793,20 +792,10 @@ export class SaasService {
     }
 
     return this.prisma.$transaction(async tx => {
-      const empresa = await tx.empresa.update({
-        where: { id: empresaId },
-        data: { planoId },
-        include: { plano: true, modulosAtivos: true },
-      });
-      // Safely add newly included modules; never silently delete add-ons already granted.
-      for (const modulo of plano.modulosPadrao) {
-        await tx.empresaModulo.upsert({
-          where: { empresaId_modulo: { empresaId, modulo } },
-          create: { empresaId, modulo, ativo: true },
-          update: { ativo: true },
-        });
-      }
-      return empresa;
+      const atual = await tx.empresa.findUniqueOrThrow({where:{id:empresaId},select:{planoId:true}});
+      // A plan switch deliberately resets old entitlements, including add-ons.
+      if(atual.planoId !== planoId) await tx.empresaModulo.deleteMany({where:{empresaId}});
+      return tx.empresa.update({where:{id:empresaId},data:{planoId},include:{plano:true,modulosAtivos:true}});
     });
   }
 }

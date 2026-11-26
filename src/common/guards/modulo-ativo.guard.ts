@@ -2,14 +2,13 @@ import { CanActivate, ExecutionContext, ForbiddenException, Injectable, SetMetad
 import { Reflector } from '@nestjs/core';
 import { NomeModulo } from '@prisma/client';
 import { PrismaService } from '../../core/prisma/prisma.service';
+import { consultarModulos } from '../modulos/plano-modulos';
 
 const MODULO_KEY = 'bebfy:modulo-requerido';
 export const ExigirModulo = (modulo: NomeModulo) => SetMetadata(MODULO_KEY, modulo);
 
 /**
- * Tenant modules are enabled by default for existing customers without a row,
- * but an explicit EmpresaModulo.ativo=false blocks the protected feature.
- * This keeps upgrades backward-compatible while making SaaS toggles enforceable.
+ * Plano contratual + exceções explícitas. Empresas antigas sem plano mantêm os módulos operacionais.
  */
 @Injectable()
 export class ModuloAtivoGuard implements CanActivate {
@@ -28,12 +27,9 @@ export class ModuloAtivoGuard implements CanActivate {
     const empresaId: number | undefined = request.user?.empresaId;
     if (!empresaId) throw new ForbiddenException('Empresa não identificada para validar o módulo.');
 
-    const configuracao = await this.prisma.empresaModulo.findUnique({
-      where: { empresaId_modulo: { empresaId, modulo } },
-      select: { ativo: true },
-    });
-    if (configuracao && !configuracao.ativo) {
-      throw new ForbiddenException('Módulo desativado para esta distribuidora.');
+    const modulos = await consultarModulos(this.prisma, empresaId);
+    if (!modulos[modulo]) {
+      throw new ForbiddenException('Módulo não disponível no plano desta distribuidora.');
     }
     return true;
   }

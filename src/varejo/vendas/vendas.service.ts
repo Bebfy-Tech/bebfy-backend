@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CreateVendaDto } from './dto/create-venda.dto';
+import { consultarModulos } from '../../common/modulos/plano-modulos';
 import {
   FormaPagamento,
   StatusCaixa,
@@ -20,15 +21,16 @@ export class VendasService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(empresaId: number, createVendaDto: CreateVendaDto) {
-    // A disabled delivery module cannot be bypassed by submitting DELIVERY via PDV.
-    if (createVendaDto.tipoEntrega === TipoEntrega.DELIVERY) {
-      const module = await this.prisma.empresaModulo.findUnique({
-        where: { empresaId_modulo: { empresaId, modulo: 'ENTREGAS_DELIVERY' } },
-        select: { ativo: true },
-      });
-      if (module && !module.ativo) {
-        throw new ForbiddenException('Módulo de entregas desativado para esta distribuidora.');
-      }
+    // The same entitlement resolver also protects optional actions inside the PDV.
+    const modulos = await consultarModulos(this.prisma, empresaId);
+    if (!modulos.ENTREGAS_DELIVERY && (createVendaDto.tipoEntrega === TipoEntrega.DELIVERY || Number(createVendaDto.taxaEntrega || 0) > 0)) {
+      throw new ForbiddenException('Módulo de entregas desativado.');
+    }
+    if (!modulos.FIADOS && createVendaDto.pagamentos.some(p => p.formaPagamento === FormaPagamento.FIADO)) {
+      throw new ForbiddenException('Módulo de fiados desativado.');
+    }
+    if (!modulos.VASILHAMES_RETORNAVEIS && Number(createVendaDto.cascosDevolvidos || 0) > 0) {
+      throw new ForbiddenException('Módulo de vasilhames desativado.');
     }
     const caixa = await this.prisma.caixa.findUnique({
       where: { id: createVendaDto.caixaId },
@@ -84,7 +86,7 @@ export class VendasService {
         );
       }
 
-      if (produto.retornavel) {
+      if (modulos.VASILHAMES_RETORNAVEIS && produto.retornavel) {
         totalCascosNovos += unidadesParaAbater;
       }
 

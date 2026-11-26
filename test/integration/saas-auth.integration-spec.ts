@@ -324,7 +324,7 @@ describe('SaaS: administradores independentes das distribuidoras', () => {
       const setting='/saas/admin/empresas/'+company.id+'/modulos';
       const initial=await request(server).get('/auth/modulos').set(tenantToken);
       expect(initial.status).toBe(200);
-      expect(initial.body.modulos.FIADOS).toBeUndefined();
+      expect(initial.body.modulos.FIADOS).toBe(true);
 
       const disabled=await request(server).patch(setting).set(adminToken)
         .send({modulo:'FIADOS',ativo:false});
