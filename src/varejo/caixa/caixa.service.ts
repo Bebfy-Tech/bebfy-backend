@@ -101,8 +101,8 @@ export class CaixaService {
     caixaId: string,
     dto: FecharCaixaDto,
   ) {
-    const saldoFisico = Number(dto.saldoFinalFisico);
-    if (!Number.isFinite(saldoFisico) || saldoFisico < 0) {
+    const saldoFisico = dto.saldoFinalFisico == null ? null : Number(dto.saldoFinalFisico);
+    if (saldoFisico !== null && (!Number.isFinite(saldoFisico) || saldoFisico < 0)) {
       throw new BadRequestException('O saldo físico do caixa deve ser um valor não negativo.');
     }
 
@@ -153,7 +153,7 @@ export class CaixaService {
         data: {
           saldoFinalSistema,
           saldoFinalFisico: saldoFisico,
-          quebraDeCaixa: saldoFisico - saldoFinalSistema,
+          quebraDeCaixa: saldoFisico === null ? null : saldoFisico - saldoFinalSistema,
           status: StatusCaixa.FECHADO,
           fechadoEm: new Date(),
         },
@@ -188,7 +188,7 @@ export class CaixaService {
   }
 
   async findAll(empresaId: number) {
-    return this.prisma.caixa.findMany({
+    const caixas = await this.prisma.caixa.findMany({
       where: {
         operador: {
           empresaId,
@@ -202,6 +202,14 @@ export class CaixaService {
         abertoEm: 'desc',
       },
     });
+    const totais = await this.prisma.venda.groupBy({
+      by: ['caixaId'],
+      where: { empresaId, status: StatusVenda.CONCLUIDA, caixaId: { in: caixas.map(c => c.id) } },
+      _sum: { valorTotal: true }, _count: { id: true },
+    });
+    const porCaixa = new Map(totais.map(v => [v.caixaId, v]));
+    return caixas.map(c => ({ ...c, totalVendas: Number(porCaixa.get(c.id)?._sum.valorTotal || 0),
+      quantidadeVendas: porCaixa.get(c.id)?._count.id || 0 }));
   }
 
   async findOne(empresaId: number, id: string) {
@@ -237,19 +245,24 @@ export class CaixaService {
       .filter((m) => m.tipo === TipoMovimentacaoCaixa.SANGRIA)
       .reduce((acc, m) => acc + Number(m.valor), 0);
 
+    // Sales totals include all concluded sales, while drawer cash excludes unsettled deliveries.
     const vendas = await this.prisma.venda.findMany({
-      where: {
-        caixaId, empresaId, status: StatusVenda.CONCLUIDA,
-        OR: [{ tipoEntrega: 'RETIRADA_BALCAO' }, { statusAcerto: 'CONCLUIDO' }],
-      },
+      where: { caixaId, empresaId, status: StatusVenda.CONCLUIDA },
       include: { pagamentos: true },
     });
-    const dinheiroVendas = vendas.reduce(
-      (total, venda) => total + venda.pagamentos
-        .filter(p => p.formaPagamento === FormaPagamento.DINHEIRO)
-        .reduce((sum, p) => sum + Number(p.valor) - Number(p.troco), 0),
-      0,
-    );
+    const pagamentos = Object.fromEntries(Object.values(FormaPagamento).map(f => [f, 0])) as Record<FormaPagamento, number>;
+    let dinheiroVendas = 0;
+    let entregasPendentes = 0;
+    for (const venda of vendas) {
+      const acertada = venda.tipoEntrega === 'RETIRADA_BALCAO' || venda.statusAcerto === 'CONCLUIDO';
+      if (!acertada) entregasPendentes += Number(venda.valorTotal);
+      for (const p of venda.pagamentos) {
+        const liquido = Number(p.valor) - Number(p.troco);
+        pagamentos[p.formaPagamento] += liquido;
+        if (acertada && p.formaPagamento === FormaPagamento.DINHEIRO) dinheiroVendas += liquido;
+      }
+    }
+    const totalVendas = vendas.reduce((total,v) => total + Number(v.valorTotal), 0);
 
     return {
       caixaId: caixa.id,
@@ -258,6 +271,8 @@ export class CaixaService {
       totalSuprimentos,
       totalSangrias,
       totalDinheiroVendas: dinheiroVendas,
+      totalVendas, quantidadeVendas: vendas.length, pagamentos, entregasPendentes,
+      saldoFinalFisico: caixa.saldoFinalFisico, quebraDeCaixa: caixa.quebraDeCaixa,
       saldoParcialSistema: Number(caixa.saldoInicial) + totalSuprimentos - totalSangrias + dinheiroVendas,
       movimentacoes: caixa.movimentacoes,
     };

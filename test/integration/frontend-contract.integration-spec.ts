@@ -179,6 +179,14 @@ describe('HTTP contracts: React frontend / backend multi-tenant', () => {
     expect(painel.body.vendasUltimos7Dias[6].quantidade).toBe(1);
     expect(painel.body.pagamentosMes).toEqual([{ formaPagamento: 'DINHEIRO', valor: 20 }]);
     expect(painel.body.totalClientesDevedores).toBe(0);
+    const extrato = await request(app.getHttpServer()).get('/caixa/' + caixaId + '/extrato').set(headers);
+    expect(extrato.status).toBe(200);
+    expect(extrato.body.totalVendas).toBe(20);
+    expect(extrato.body.quantidadeVendas).toBe(1);
+    expect(extrato.body.pagamentos.DINHEIRO).toBe(20);
+    expect(extrato.body.saldoParcialSistema).toBe(20);
+    const caixas = await request(app.getHttpServer()).get('/caixa').set(headers);
+    expect(caixas.body.find((c: { id: string }) => c.id === caixaId).totalVendas).toBe(20);
 
     const fiscal = await request(app.getHttpServer()).get('/notas-fiscais').set(headers);
     expect(fiscal.status).toBe(404);
