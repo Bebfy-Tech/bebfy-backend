@@ -1,6 +1,7 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../core/prisma/prisma.service';
 import { StatusCaixa, StatusVenda } from '@prisma/client';
+import { consultarModulos } from '../common/modulos/plano-modulos';
 
 @Injectable()
 export class RelatoriosService {
@@ -105,38 +106,54 @@ export class RelatoriosService {
         },
       });
 
-      // Série com sete dias corridos, inclusive dias sem vendas. Agrupa no banco
-      // por intervalo para não transportar todas as vendas para o frontend.
-      const vendasUltimos7Dias = await Promise.all(
-        Array.from({ length: 7 }, async (_, index) => {
-          const inicio = new Date(inicioSemana);
-          inicio.setDate(inicio.getDate() + index);
-          const fim = new Date(inicio);
-          fim.setDate(fim.getDate() + 1);
+      // Calculate bounded daily aggregates once for the union of the month and last 7 days.
+      const inicioSerie = inicioMes < inicioSemana ? inicioMes : inicioSemana;
+      const datas: Date[] = [];
+      for (let d = new Date(inicioSerie); d < amanhaInicio; d.setDate(d.getDate() + 1)) datas.push(new Date(d));
+      // Limit concurrent database requests, even on the last day of a month.
+      const serie: Array<{ data: string; faturamento: number; quantidade: number }> = [];
+      for (let i = 0; i < datas.length; i += 7) {
+        serie.push(...await Promise.all(datas.slice(i,i+7).map(async inicio => {
+          const fim = new Date(inicio); fim.setDate(fim.getDate() + 1);
           const vendas = await this.prisma.venda.aggregate({
             where: { empresaId, status: StatusVenda.CONCLUIDA, criadoEm: { gte: inicio, lt: fim } },
-            _sum: { valorTotal: true },
-            _count: { id: true },
+            _sum: { valorTotal: true }, _count: { id: true },
           });
           return { data: diaLocal(inicio), faturamento: Number(vendas._sum.valorTotal || 0), quantidade: vendas._count.id };
-        }),
-      );
+        })));
+      }
+      const vendasUltimos7Dias = serie.filter(d => d.data >= diaLocal(inicioSemana));
+      const vendasDiasMes = serie.filter(d => d.data >= diaLocal(inicioMes));
 
-      // Valores líquidos de troco, somente vendas concluídas no mês corrente.
-      // Fiado integra o valor das vendas, não representa dinheiro recebido.
-      const pagamentos = await this.prisma.pagamentoVenda.groupBy({
-        by: ['formaPagamento'],
-        where: { venda: { empresaId, status: StatusVenda.CONCLUIDA, criadoEm: { gte: inicioMes, lt: fimMes } } },
-        _sum: { valor: true, troco: true },
-      });
-      const pagamentosMes = pagamentos.map(p => ({
-        formaPagamento: p.formaPagamento,
-        valor: Math.round((Number(p._sum.valor || 0) - Number(p._sum.troco || 0)) * 100) / 100,
-      }));
+      const pagamentosPeriodo = async (inicio: Date, fim: Date) => {
+        const pagamentos = await this.prisma.pagamentoVenda.groupBy({
+          by: ['formaPagamento'],
+          where: { venda: { empresaId, status: StatusVenda.CONCLUIDA, criadoEm: { gte: inicio, lt: fim } } },
+          _sum: { valor: true, troco: true },
+        });
+        return pagamentos.map(p => ({
+          formaPagamento: p.formaPagamento,
+          valor: Math.round((Number(p._sum.valor || 0) - Number(p._sum.troco || 0)) * 100) / 100,
+        }));
+      };
+      const [pagamentosHoje, pagamentos7Dias, pagamentosMes, modulos, estoqueBaixo] = await Promise.all([
+        pagamentosPeriodo(hojeInicio, amanhaInicio),
+        pagamentosPeriodo(inicioSemana, amanhaInicio),
+        pagamentosPeriodo(inicioMes, fimMes),
+        consultarModulos(this.prisma, empresaId),
+        this.prisma.produto.count({ where: { empresaId, ativo: true, estoqueAtual: { lte: this.prisma.produto.fields.estoqueMinimo } } }),
+      ]);
+      const limiteValidade = new Date(hojeInicio); limiteValidade.setDate(limiteValidade.getDate() + 31);
+      const loteBase = { empresaId, quantidade: { gt: 0 }, produto: { empresaId, ativo: true } };
+      const [lotesVencidos, lotesAVencer] = modulos.ESTOQUE_LOTES ? await Promise.all([
+        this.prisma.loteProduto.count({ where: { ...loteBase, dataVencimento: { lt: hojeInicio } } }),
+        this.prisma.loteProduto.count({ where: { ...loteBase, dataVencimento: { gte: hojeInicio, lt: limiteValidade } } }),
+      ]) : [null,null];
 
       return {
-        vendasUltimos7Dias,
-        pagamentosMes,
+        vendasUltimos7Dias, vendasDiasMes,
+        pagamentosHoje, pagamentos7Dias, pagamentosMes,
+        alertas: { estoqueBaixo, lotesVencidos, lotesAVencer },
         faturamentoHoje: Number(vendasHoje._sum.valorTotal || 0),
         totalVendasHoje: vendasHoje._count.id,
         faturamentoMes: Number(vendasMes._sum.valorTotal || 0),
