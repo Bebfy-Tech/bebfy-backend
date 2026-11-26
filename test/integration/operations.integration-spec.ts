@@ -105,6 +105,7 @@ describe('API operacional: contratos integrados e segurança por empresa', () =>
   });
 
   it('consulta sem caixa aberto e rejeita saldo inicial negativo', async () => {
+    const server = app.getHttpServer();
     const consulta=await request(server).get('/caixa/aberto/operador/'+funcionarioId).set(headers());
     expect(consulta.status).toBe(200);
     expect(consulta.text==='' || consulta.body===null).toBe(true);
@@ -124,6 +125,24 @@ describe('API operacional: contratos integrados e segurança por empresa', () =>
     expect(caixa.status).toBe(201);
     caixaId = caixa.body.id;
 
+    const duplicado = await request(server).post('/caixa/abrir').set(headers())
+      .send({ operadorId: funcionarioId, saldoInicial: 0 });
+    expect(duplicado.status).toBe(400);
+    const movimentacaoInvalida = await request(server).post('/caixa/' + caixaId + '/movimentacao').set(headers())
+      .send({ tipo: 'SUPRIMENTO', valor: -5, categoria: 'QA' });
+    expect(movimentacaoInvalida.status).toBe(400);
+    const precoAlterado = await request(server).post('/vendas').set(headers()).send({
+      caixaId, funcionarioId, clienteId,
+      itens: [{ produtoId, quantidade: 1, precoUnitario: 1 }],
+      pagamentos: [{ formaPagamento: 'DINHEIRO', valor: 1 }],
+    });
+    expect(precoAlterado.status).toBe(400);
+    const trocoInvalido = await request(server).post('/vendas').set(headers()).send({
+      caixaId, funcionarioId, clienteId,
+      itens: [{ produtoId, quantidade: 1, precoUnitario: 11 }],
+      pagamentos: [{ formaPagamento: 'DINHEIRO', valor: 1, troco: 2 }, { formaPagamento: 'PIX', valor: 12 }],
+    });
+    expect(trocoInvalido.status).toBe(400);
     const before = await request(server).get('/produtos/' + produtoId).set(headers());
     expect(before.status).toBe(200);
     const venda = await request(server).post('/vendas').set(headers()).send({
