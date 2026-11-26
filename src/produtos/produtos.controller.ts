@@ -10,6 +10,7 @@ import {
   ParseIntPipe,
   Query,
   Put,
+  ParseBoolPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -87,6 +88,19 @@ export class ProdutosController {
     @Query('q') termo: string,
   ) {
     return this.produtosService.buscarInteligente(termo, empresaId);
+  }
+
+  // Management listing includes inactive items without changing the active-only PDV contract.
+  @ExigirPermissao('PRODUTOS_GERENCIAR')
+  @Get('gestao')
+  listarGestao(@CurrentTenant() empresaId: number) {
+    return this.produtosService.listarGestao(empresaId);
+  }
+
+  @ExigirPermissao('PRODUTOS_GERENCIAR')
+  @Patch(':id/situacao')
+  alterarSituacao(@CurrentTenant() empresaId: number, @Param('id', ParseIntPipe) id: number, @Body('ativo', ParseBoolPipe) ativo: boolean) {
+    return this.produtosService.alterarSituacao(id, empresaId, ativo);
   }
 
   @ApiOperation({

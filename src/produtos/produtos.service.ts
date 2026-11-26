@@ -32,6 +32,22 @@ export class ProdutosService {
     });
   }
 
+  async listarGestao(empresaId: number) {
+    return this.prisma.produto.findMany({
+      where: { empresaId },
+      include: { categoria: true, lotes: true, foto: { select: { produtoId: true } } },
+      orderBy: { criadoEm: 'desc' },
+    });
+  }
+
+  async alterarSituacao(id: number, empresaId: number, ativo: boolean) {
+    const resultado = await this.prisma.produto.updateMany({
+      where: { id, empresaId }, data: { ativo },
+    });
+    if (resultado.count !== 1) throw new NotFoundException('Produto não encontrado nesta empresa.');
+    return { ok: true, ativo };
+  }
+
   async findOne(id: number, empresaId: number) {
     const produto = await this.prisma.produto.findFirst({
       where: { id, empresaId, ativo: true },
