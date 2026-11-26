@@ -17,12 +17,20 @@ export class RelatoriosService {
         1,
       );
 
+      const amanhaInicio = new Date(hojeInicio);
+      amanhaInicio.setDate(amanhaInicio.getDate() + 1);
+      const fimMes = new Date(hojeInicio.getFullYear(), hojeInicio.getMonth() + 1, 1);
+      const inicioSemana = new Date(hojeInicio);
+      inicioSemana.setDate(inicioSemana.getDate() - 6);
+      const diaLocal = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
       // 1. Total faturado hoje em vendas concluídas para a empresa logada
       const vendasHoje = await this.prisma.venda.aggregate({
         where: {
           empresaId,
           status: StatusVenda.CONCLUIDA,
-          criadoEm: { gte: hojeInicio },
+          criadoEm: { gte: hojeInicio, lt: amanhaInicio },
         },
         _sum: { valorTotal: true },
         _count: { id: true },
@@ -33,7 +41,7 @@ export class RelatoriosService {
         where: {
           empresaId,
           status: StatusVenda.CONCLUIDA,
-          criadoEm: { gte: inicioMes },
+          criadoEm: { gte: inicioMes, lt: fimMes },
         },
         _sum: { valorTotal: true },
         _count: { id: true },
@@ -43,6 +51,7 @@ export class RelatoriosService {
       const fiadosPendentes = await this.prisma.cliente.aggregate({
         where: {
           empresaId,
+          saldoDevedor: { gt: 0 },
         },
         _sum: { saldoDevedor: true },
         _count: { id: true },
@@ -96,7 +105,38 @@ export class RelatoriosService {
         },
       });
 
+      // Série com sete dias corridos, inclusive dias sem vendas. Agrupa no banco
+      // por intervalo para não transportar todas as vendas para o frontend.
+      const vendasUltimos7Dias = await Promise.all(
+        Array.from({ length: 7 }, async (_, index) => {
+          const inicio = new Date(inicioSemana);
+          inicio.setDate(inicio.getDate() + index);
+          const fim = new Date(inicio);
+          fim.setDate(fim.getDate() + 1);
+          const vendas = await this.prisma.venda.aggregate({
+            where: { empresaId, status: StatusVenda.CONCLUIDA, criadoEm: { gte: inicio, lt: fim } },
+            _sum: { valorTotal: true },
+            _count: { id: true },
+          });
+          return { data: diaLocal(inicio), faturamento: Number(vendas._sum.valorTotal || 0), quantidade: vendas._count.id };
+        }),
+      );
+
+      // Valores líquidos de troco, somente vendas concluídas no mês corrente.
+      // Fiado integra o valor das vendas, não representa dinheiro recebido.
+      const pagamentos = await this.prisma.pagamentoVenda.groupBy({
+        by: ['formaPagamento'],
+        where: { venda: { empresaId, status: StatusVenda.CONCLUIDA, criadoEm: { gte: inicioMes, lt: fimMes } } },
+        _sum: { valor: true, troco: true },
+      });
+      const pagamentosMes = pagamentos.map(p => ({
+        formaPagamento: p.formaPagamento,
+        valor: Math.round((Number(p._sum.valor || 0) - Number(p._sum.troco || 0)) * 100) / 100,
+      }));
+
       return {
+        vendasUltimos7Dias,
+        pagamentosMes,
         faturamentoHoje: Number(vendasHoje._sum.valorTotal || 0),
         totalVendasHoje: vendasHoje._count.id,
         faturamentoMes: Number(vendasMes._sum.valorTotal || 0),
