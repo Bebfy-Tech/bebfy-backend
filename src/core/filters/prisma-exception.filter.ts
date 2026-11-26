@@ -1,9 +1,10 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpStatus } from '@nestjs/common';
+import { ArgumentsHost, Catch, ExceptionFilter, HttpStatus, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Response } from 'express';
 
 @Catch(Prisma.PrismaClientKnownRequestError)
 export class PrismaExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger('Prisma');
   catch(exception: Prisma.PrismaClientKnownRequestError, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -14,8 +15,7 @@ export class PrismaExceptionFilter implements ExceptionFilter {
     switch (exception.code) {
       case 'P2002': // Violação de chave única (Unique constraint)
         status = HttpStatus.BAD_REQUEST;
-        const target = (exception.meta?.target as string[])?.join(', ') || 'campo';
-        message = `Já existe um registro com este valor para o campo: ${target}.`;
+        message = 'Já existe um registro com estes dados.';
         break;
 
       case 'P2025': // Registro não encontrado
@@ -29,14 +29,15 @@ export class PrismaExceptionFilter implements ExceptionFilter {
         break;
 
       default:
-        message = `Erro Prisma (${exception.code}): ${exception.message}`;
+        this.logger.error('Falha de banco: '+exception.code,exception.stack);
+        message = 'Erro interno no banco de dados.';
         break;
     }
 
     response.status(status).json({
       statusCode: status,
       timestamp: new Date().toISOString(),
-      path: ctx.getRequest().url,
+      path: ctx.getRequest().path,
       message,
     });
   }

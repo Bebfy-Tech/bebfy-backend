@@ -1,6 +1,8 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsInt,
+  ArrayMaxSize,
   IsBoolean,
   IsEnum,
   IsNotEmpty,
@@ -15,16 +17,17 @@ import {
 import { FormaPagamento, TipoEntrega } from '@prisma/client';
 
 export class CreateItemVendaDto {
-  @IsNumber({}, { message: 'O ID do produto deve ser um número.' })
+  @IsInt()
+  @Min(1)
   @IsNotEmpty({ message: 'O ID do produto é obrigatório.' })
   produtoId: number;
 
-  @IsNumber({}, { message: 'A quantidade deve ser um número.' })
+  @IsInt()
   @IsNotEmpty({ message: 'A quantidade é obrigatória.' })
   @IsPositive()
   quantidade: number;
 
-  @IsNumber({}, { message: 'O preço unitário deve ser um número.' })
+  @IsNumber({maxDecimalPlaces:2}, { message: 'O preço unitário deve ser um número.' })
   @IsNotEmpty({ message: 'O preço unitário é obrigatório.' })
   @Min(0)
   precoUnitario: number;
@@ -39,13 +42,13 @@ export class CreatePagamentoVendaDto {
   @IsNotEmpty({ message: 'A forma de pagamento é obrigatória.' })
   formaPagamento: FormaPagamento;
 
-  @IsNumber({}, { message: 'O valor do pagamento deve ser um número.' })
+  @IsNumber({maxDecimalPlaces:2}, { message: 'O valor do pagamento deve ser um número.' })
   @IsNotEmpty({ message: 'O valor do pagamento é obrigatório.' })
   @IsPositive()
   valor: number;
 
   @IsOptional()
-  @IsNumber({}, { message: 'O troco deve ser um número.' })
+  @IsNumber({maxDecimalPlaces:2}, { message: 'O troco deve ser um número.' })
   @Min(0)
   troco?: number;
 }
@@ -63,7 +66,7 @@ export class CreateVendaDto {
   @IsOptional()
   clienteId?: string;
 
-  @IsNumber({}, { message: 'O valor do desconto deve ser um número.' })
+  @IsNumber({maxDecimalPlaces:2}, { message: 'O valor do desconto deve ser um número.' })
   @IsOptional()
   @Min(0)
   desconto?: number;
@@ -72,7 +75,7 @@ export class CreateVendaDto {
   @IsOptional()
   tipoEntrega?: TipoEntrega;
 
-  @IsNumber({}, { message: 'A taxa de entrega deve ser um número.' })
+  @IsNumber({maxDecimalPlaces:2}, { message: 'A taxa de entrega deve ser um número.' })
   @IsOptional()
   @Min(0)
   taxaEntrega?: number;
@@ -82,7 +85,7 @@ export class CreateVendaDto {
   enderecoEntrega?: string;
 
   @IsOptional()
-  @IsNumber({}, { message: 'A quantidade de cascos devolvidos deve ser um número.' })
+  @IsInt()
   @Min(0)
   cascosDevolvidos?: number;
 
@@ -90,11 +93,13 @@ export class CreateVendaDto {
   @ValidateNested({ each: true })
   @Type(() => CreateItemVendaDto)
   @ArrayMinSize(1)
+  @ArrayMaxSize(200)
   itens: CreateItemVendaDto[];
 
   @IsArray({ message: 'Os pagamentos devem ser uma lista.' })
   @ValidateNested({ each: true })
   @Type(() => CreatePagamentoVendaDto)
   @ArrayMinSize(1)
+  @ArrayMaxSize(20)
   pagamentos: CreatePagamentoVendaDto[];
 }

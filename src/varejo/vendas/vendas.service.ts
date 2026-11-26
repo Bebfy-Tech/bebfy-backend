@@ -64,6 +64,11 @@ export class VendasService {
       if (!cliente) throw new NotFoundException('Cliente não pertence a esta empresa ou está inativo.');
     }
 
+    if(!modulos.CAIXA_PDV)throw new ForbiddenException('Módulo de PDV desativado.');
+    if(createVendaDto.tipoEntrega===TipoEntrega.DELIVERY&&!createVendaDto.enderecoEntrega?.trim())throw new BadRequestException('Informe o endereço da entrega.');
+    if(createVendaDto.tipoEntrega!==TipoEntrega.DELIVERY&&Number(createVendaDto.taxaEntrega||0)>0)throw new BadRequestException('Taxa de entrega exige delivery.');
+    if(Number(createVendaDto.cascosDevolvidos||0)>0&&!createVendaDto.clienteId)throw new BadRequestException('Informe o cliente para devolver vasilhames.');
+    if(createVendaDto.pagamentos.some(p=>Number(p.troco||0)>Number(p.valor)))throw new BadRequestException('Troco não pode superar o pagamento.');
     let subtotal = 0;
     let totalCascosNovos = 0;
 
@@ -90,12 +95,19 @@ export class VendasService {
         totalCascosNovos += unidadesParaAbater;
       }
 
-      subtotal += item.quantidade * Number(item.precoUnitario);
+      if(!Number.isInteger(item.quantidade)||item.quantidade<1)throw new BadRequestException('Quantidade inválida.');
+      if(item.isFardo&&Number(produto.fardoQuantidade||1)<2)throw new BadRequestException('Produto sem fardo cadastrado.');
+      const preco=Number(item.isFardo&&produto.precoVendaAtacado!=null?produto.precoVendaAtacado:produto.precoVendaVarejo);
+      if(Math.abs(preco-Number(item.precoUnitario))>0.0001)throw new BadRequestException('Preço do produto alterado. Atualize o PDV antes de finalizar.');
+      subtotal += item.quantidade * preco;
     }
 
     const desconto = Number(createVendaDto.desconto || 0);
     const taxaEntrega = Number(createVendaDto.taxaEntrega || 0);
-    const valorTotal = subtotal - desconto + taxaEntrega;
+    if(desconto>subtotal)throw new BadRequestException('Desconto não pode superar o subtotal.');
+    const gestor=['PROPRIETARIO','ADMINISTRADOR','GERENTE'].includes(funcionario.cargo);
+    if(!gestor&&desconto>subtotal*Number(funcionario.descontoMaximo)/100+0.0001)throw new ForbiddenException('Desconto supera o limite autorizado para este funcionário.');
+    const valorTotal = Math.round((subtotal - desconto + taxaEntrega)*100)/100;
 
     const valorFiado = createVendaDto.pagamentos
       .filter(p => p.formaPagamento === FormaPagamento.FIADO)
@@ -128,8 +140,8 @@ export class VendasService {
       }
     }
 
-    if (valorTotal < 0) {
-      throw new BadRequestException('O valor total da venda não pode ser negativo.');
+    if (valorTotal <= 0) {
+      throw new BadRequestException('O valor total da venda deve ser positivo.');
     }
     const totalPago = createVendaDto.pagamentos.reduce(
       (sum, p) => sum + Number(p.valor) - Number(p.troco || 0), 0,
@@ -173,7 +185,10 @@ export class VendasService {
       });
 
       for (const item of createVendaDto.itens) {
-        const produto = await tx.produto.findUnique({ where: { id: item.produtoId } });
+        const produto = await tx.produto.findFirst({where:{id:item.produtoId,empresaId,ativo:true}});
+        if(!produto)throw new BadRequestException('Produto indisponível.');
+        const precoAtual=Number(item.isFardo&&produto.precoVendaAtacado!=null?produto.precoVendaAtacado:produto.precoVendaVarejo);
+        if(Math.abs(precoAtual-Number(item.precoUnitario))>0.0001)throw new BadRequestException('Preço alterado durante a venda. Atualize o PDV.');
         const unidadesParaAbater = item.isFardo
           ? item.quantidade * (produto.fardoQuantidade || 1)
           : item.quantidade;
@@ -213,14 +228,11 @@ export class VendasService {
         const cascosDevolvidos = createVendaDto.cascosDevolvidos || 0;
         const variacaoCascos = totalCascosNovos - cascosDevolvidos;
 
-        await tx.cliente.update({
-          where: { id: createVendaDto.clienteId },
-          data: {
-            cascosEmPosse: {
-              increment: variacaoCascos,
-            },
-          },
+        const alteracao=await tx.cliente.updateMany({
+          where:{id:createVendaDto.clienteId,empresaId,ativo:true,...(variacaoCascos<0?{cascosEmPosse:{gte:-variacaoCascos}}:{})},
+          data:{cascosEmPosse:{increment:variacaoCascos}},
         });
+        if(alteracao.count!==1)throw new BadRequestException('Saldo insuficiente de vasilhames ou cliente indisponível.');
       }
 
       if (valorFiado > 0 && createVendaDto.clienteId) {
@@ -296,14 +308,18 @@ export class VendasService {
   }
 
   async confirmarAcertoDelivery(empresaId: number, vendaIds: string[]) {
-    return this.prisma.venda.updateMany({
-      where: {
-        id: { in: vendaIds },
-        empresaId,
-      },
-      data: {
-        statusAcerto: StatusAcerto.CONCLUIDO,
-      },
+    if(!Array.isArray(vendaIds)||vendaIds.length<1||vendaIds.length>200||vendaIds.some(id=>typeof id!=='string'||!id.trim()))throw new BadRequestException('Informe de 1 a 200 vendas válidas.');
+    const ids=[...new Set(vendaIds)];
+    return this.prisma.$transaction(async tx=>{
+      const vendas=await tx.venda.findMany({where:{id:{in:ids},empresaId,tipoEntrega:TipoEntrega.DELIVERY,status:StatusVenda.CONCLUIDA,statusAcerto:StatusAcerto.PENDENTE},select:{id:true,caixaId:true}});
+      if(vendas.length!==ids.length)throw new BadRequestException('Há vendas inválidas ou já acertadas na seleção.');
+      for(const caixaId of [...new Set(vendas.map(v=>v.caixaId))].sort()){
+        const lock=await tx.caixa.updateMany({where:{id:caixaId,empresaId,status:StatusCaixa.ABERTO},data:{status:StatusCaixa.ABERTO}});
+        if(lock.count!==1)throw new BadRequestException('Entrega vinculada a caixa fechado exige conciliação separada.');
+      }
+      const resultado=await tx.venda.updateMany({where:{id:{in:ids},empresaId,tipoEntrega:TipoEntrega.DELIVERY,status:StatusVenda.CONCLUIDA,statusAcerto:StatusAcerto.PENDENTE},data:{statusAcerto:StatusAcerto.CONCLUIDO}});
+      if(resultado.count!==ids.length)throw new BadRequestException('Acerto alterado durante a operação. Atualize a lista.');
+      return resultado;
     });
   }
 
@@ -411,10 +427,11 @@ export class VendasService {
         }
         const novoSaldo = Number(clienteAtual.saldoDevedor) - valorFiado;
 
-        await tx.cliente.update({
-          where: { id: venda.clienteId },
-          data: { saldoDevedor: novoSaldo },
+        const estorno=await tx.cliente.updateMany({
+          where:{id:venda.clienteId,empresaId,saldoDevedor:{equals:clienteAtual.saldoDevedor}},
+          data:{saldoDevedor:{decrement:valorFiado}},
         });
+        if(estorno.count!==1)throw new BadRequestException('Saldo do fiado alterado durante o estorno. Tente novamente.');
 
         await tx.historicoFiado.create({
           data: {

@@ -14,40 +14,14 @@ export class CaixaService {
   constructor(private readonly prisma: PrismaService) {}
 
   async abrirCaixa(empresaId: number, abrirCaixaDto: AbrirCaixaDto) {
-    const operador = await this.prisma.funcionario.findFirst({
-      where: {
-        id: abrirCaixaDto.operadorId,
-        empresaId,
-      },
-    });
-
-    if (!operador) {
-      throw new NotFoundException('O operador informado não foi encontrado nesta empresa.');
-    }
-
-    const caixaAberto = await this.prisma.caixa.findFirst({
-      where: {
-        operadorId: abrirCaixaDto.operadorId,
-        status: StatusCaixa.ABERTO,
-        operador: {
-          empresaId,
-        },
-      },
-    });
-
-    if (caixaAberto) {
-      throw new BadRequestException(
-        'Já existe um caixa ABERTO para este operador nesta empresa.',
-      );
-    }
-
-    return this.prisma.caixa.create({
-      data: {
-        empresaId,
-        operadorId: abrirCaixaDto.operadorId,
-        saldoInicial: abrirCaixaDto.saldoInicial,
-        status: StatusCaixa.ABERTO,
-      } as any,
+    if(!Number.isFinite(abrirCaixaDto.saldoInicial)||abrirCaixaDto.saldoInicial<0)throw new BadRequestException('Saldo inicial inválido.');
+    return this.prisma.$transaction(async tx=>{
+      // Lock the employee before checking for an existing register.
+      const lock=await tx.funcionario.updateMany({where:{id:abrirCaixaDto.operadorId,empresaId,ativo:true},data:{ativo:true}});
+      if(lock.count!==1)throw new NotFoundException('Operador não encontrado ou inativo nesta empresa.');
+      const aberto=await tx.caixa.findFirst({where:{empresaId,operadorId:abrirCaixaDto.operadorId,status:StatusCaixa.ABERTO}});
+      if(aberto)throw new BadRequestException('Já existe um caixa ABERTO para este operador nesta empresa.');
+      return tx.caixa.create({data:{empresaId,operadorId:abrirCaixaDto.operadorId,saldoInicial:abrirCaixaDto.saldoInicial,status:StatusCaixa.ABERTO}});
     });
   }
 
@@ -56,8 +30,10 @@ export class CaixaService {
     caixaId: string,
     movimentacaoDto: MovimentacaoCaixaDto,
   ) {
+    if(!Number.isFinite(movimentacaoDto.valor)||movimentacaoDto.valor<=0)throw new BadRequestException('Valor da movimentação deve ser positivo.');
     const caixa = await this.prisma.caixa.findFirst({
       where: { 
+        empresaId,
         id: caixaId,
         operador: {
           empresaId,
@@ -122,6 +98,8 @@ export class CaixaService {
       });
       if (!caixa) throw new NotFoundException('Caixa não encontrado.');
 
+      const pendentes=await tx.venda.count({where:{caixaId,empresaId,status:StatusVenda.CONCLUIDA,tipoEntrega:'DELIVERY',statusAcerto:'PENDENTE'}});
+      if(pendentes>0)throw new BadRequestException('Conclua os acertos de delivery antes de fechar o caixa.');
       const totalSuprimentos = caixa.movimentacoes
         .filter(m => m.tipo === TipoMovimentacaoCaixa.SUPRIMENTO)
         .reduce((total, m) => total + Number(m.valor), 0);
@@ -147,13 +125,13 @@ export class CaixaService {
       );
 
       const saldoFinalSistema =
-        Number(caixa.saldoInicial) + totalSuprimentos - totalSangrias + dinheiroVendas;
+        Math.round((Number(caixa.saldoInicial) + totalSuprimentos - totalSangrias + dinheiroVendas)*100)/100;
       return tx.caixa.update({
         where: { id: caixaId },
         data: {
           saldoFinalSistema,
           saldoFinalFisico: saldoFisico,
-          quebraDeCaixa: saldoFisico === null ? null : saldoFisico - saldoFinalSistema,
+          quebraDeCaixa: saldoFisico === null ? null : Math.round((saldoFisico - saldoFinalSistema)*100)/100,
           status: StatusCaixa.FECHADO,
           fechadoEm: new Date(),
         },
@@ -178,12 +156,7 @@ export class CaixaService {
       },
     });
 
-    if (!caixa) {
-      throw new NotFoundException(
-        'Nenhum caixa ABERTO localizado para este operador nesta empresa.',
-      );
-    }
-
+    // No open register is an ordinary state.
     return caixa;
   }
 
@@ -273,7 +246,7 @@ export class CaixaService {
       totalDinheiroVendas: dinheiroVendas,
       totalVendas, quantidadeVendas: vendas.length, pagamentos, entregasPendentes,
       saldoFinalFisico: caixa.saldoFinalFisico, quebraDeCaixa: caixa.quebraDeCaixa,
-      saldoParcialSistema: Number(caixa.saldoInicial) + totalSuprimentos - totalSangrias + dinheiroVendas,
+      saldoParcialSistema: caixa.status===StatusCaixa.FECHADO && caixa.saldoFinalSistema!=null ? Number(caixa.saldoFinalSistema) : Math.round((Number(caixa.saldoInicial) + totalSuprimentos - totalSangrias + dinheiroVendas)*100)/100,
       movimentacoes: caixa.movimentacoes,
     };
   }

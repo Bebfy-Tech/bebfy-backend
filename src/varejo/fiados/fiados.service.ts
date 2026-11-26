@@ -82,6 +82,11 @@ export class FiadosService {
 
   async registrarPagamento(empresaId: number, clienteId: string, dto: PagarFiadoDto) {
     return this.prisma.$transaction(async (tx) => {
+      // Synchronize with closing, using the same lock ordering as sales.
+      if(dto.caixaId){
+        const lock=await tx.caixa.updateMany({where:{id:dto.caixaId,empresaId,status:'ABERTO'},data:{status:'ABERTO'}});
+        if(lock.count!==1)throw new BadRequestException('Caixa informado não está aberto nesta empresa.');
+      }
       const cliente = await tx.cliente.findFirst({
         where: { id: clienteId, empresaId, ativo: true },
       });
@@ -95,7 +100,7 @@ export class FiadosService {
         throw new BadRequestException('Pagamento superior ao saldo devedor do cliente.');
       }
       const abatimento = await tx.cliente.updateMany({
-        where: { id: clienteId, empresaId, saldoDevedor: { gte: valorNum } },
+        where: { id: clienteId, empresaId, ativo:true, saldoDevedor: { gte: valorNum } },
         data: { saldoDevedor: { decrement: valorNum } },
       });
       if (abatimento.count !== 1) {

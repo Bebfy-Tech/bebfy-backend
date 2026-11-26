@@ -104,6 +104,13 @@ describe('API operacional: contratos integrados e segurança por empresa', () =>
     expect(suppliers.body.some((r: { id: string }) => r.id === supplier.body.id)).toBe(true);
   });
 
+  it('consulta sem caixa aberto e rejeita saldo inicial negativo', async () => {
+    const consulta=await request(server).get('/caixa/aberto/operador/'+funcionarioId).set(headers());
+    expect(consulta.status).toBe(200);
+    expect(consulta.text==='' || consulta.body===null).toBe(true);
+    const invalido=await request(server).post('/caixa/abrir').set(headers()).send({operadorId:funcionarioId,saldoInicial:-1});
+    expect(invalido.status).toBe(400);
+  });
   it('cadastro de clientes, venda fiada, baixa de estoque e recebimento no caixa', async () => {
     const server = app.getHttpServer();
     const cliente = await request(server).post('/clientes').set(headers()).send({

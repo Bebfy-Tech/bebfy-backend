@@ -1,5 +1,5 @@
 // Importamos os validadores do class-validator
-import { IsNotEmpty, IsNumber, IsString } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsString, Min } from 'class-validator';
 
 export class AbrirCaixaDto {
   // ID do funcionário/operador que está abrindo o caixa - Campo Obrigatório
@@ -8,7 +8,8 @@ export class AbrirCaixaDto {
   operadorId: string;
 
   // Valor em dinheiro inserido no caixa como troco inicial - Campo Obrigatório
-  @IsNumber({}, { message: 'O saldo inicial deve ser um valor numérico.' })
+  @IsNumber({maxDecimalPlaces:2}, { message: 'O saldo inicial deve ser um valor numérico.' })
   @IsNotEmpty({ message: 'O saldo inicial é obrigatório.' })
+  @Min(0)
   saldoInicial: number;
 }

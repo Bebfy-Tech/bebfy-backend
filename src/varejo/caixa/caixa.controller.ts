@@ -91,8 +91,7 @@ export class CaixaController {
     description: 'Retorna os dados do caixa atualmente aberto para determinado operador.',
   })
   @ApiParam({ name: 'operadorId', description: 'ID do operador (UUID)' })
-  @ApiResponse({ status: 200, description: 'Caixa aberto retornado com sucesso.' })
-  @ApiResponse({ status: 404, description: 'Nenhum caixa aberto encontrado.' })
+  @ApiResponse({ status: 200, description: 'Caixa aberto ou resposta vazia quando não houver caixa aberto.' })
   @Get('aberto/operador/:operadorId')
   findCaixaAbertoPorOperador(
     @CurrentTenant() empresaId: number,

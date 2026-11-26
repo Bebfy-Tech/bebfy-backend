@@ -30,16 +30,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const errorBody = {
       statusCode: status,
       timestamp: new Date().toISOString(),
-      path: request.url,
+      path: request.path,
       method: request.method,
-      error: message,
+      error: status >= 500 ? {message:'Erro interno no servidor'} : message,
     };
 
-    this.logger.error(
-      `${request.method} ${request.url} - Status ${status} - Error: ${JSON.stringify(message)}`,
-      exception instanceof Error ? exception.stack : '',
-    );
-
+    // Log expected business conditions without stack traces or sensitive query parameters.
+    const resumo = `${request.method} ${request.path} - Status ${status}`;
+    if(status>=500)this.logger.error(resumo,exception instanceof Error?exception.stack:'');
+    else if(status===409 && typeof message==='object' && 'codigo' in message && message.codigo==='SESSAO_ATIVA')this.logger.log(resumo+' - SESSAO_ATIVA');
+    else this.logger.warn(resumo);
+    
     response.status(status).json(errorBody);
   }
 }

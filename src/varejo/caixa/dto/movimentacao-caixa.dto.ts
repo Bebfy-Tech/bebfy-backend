@@ -1,5 +1,5 @@
 // Importamos os validadores e o Enum de Movimentação do Prisma
-import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsPositive } from 'class-validator';
 import { TipoMovimentacaoCaixa } from '@prisma/client';
 
 export class MovimentacaoCaixaDto {
@@ -11,8 +11,9 @@ export class MovimentacaoCaixaDto {
   tipo: TipoMovimentacaoCaixa;
 
   // Valor em reais (R$) da operação - Campo Obrigatório
-  @IsNumber({}, { message: 'O valor deve ser um número válido.' })
+  @IsNumber({maxDecimalPlaces:2}, { message: 'O valor deve ser um número válido.' })
   @IsNotEmpty({ message: 'O valor da movimentação é obrigatório.' })
+  @IsPositive()
   valor: number;
 
   // Categoria da movimentação (ex: "Troco", "Pagamento Fornecedor", "Retirada de Segurança") - Obrigatório
