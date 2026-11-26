@@ -324,7 +324,13 @@ describe('SaaS: administradores independentes das distribuidoras', () => {
       const setting='/saas/admin/empresas/'+company.id+'/modulos';
       const initial=await request(server).get('/auth/modulos').set(tenantToken);
       expect(initial.status).toBe(200);
-      expect(initial.body.modulos.FIADOS).toBe(true);
+      // The billing fixture uses a plan with no included modules.
+      expect(initial.body.modulos.FIADOS).toBe(false);
+      expect((await request(server).get('/fiados').set(tenantToken)).status).toBe(403);
+      const enabled=await request(server).patch(setting).set(adminToken)
+        .send({modulo:'FIADOS',ativo:true});
+      expect(enabled.status).toBe(200);
+      expect((await request(server).get('/fiados').set(tenantToken)).status).toBe(200);
 
       const disabled=await request(server).patch(setting).set(adminToken)
         .send({modulo:'FIADOS',ativo:false});
@@ -344,6 +350,25 @@ describe('SaaS: administradores independentes das distribuidoras', () => {
       expect(restored.status).toBe(200);
       expect((await request(server).get('/auth/modulos').set(tenantToken)).body.modulos.FIADOS).toBe(true);
       expect((await request(server).get('/fiados').set(tenantToken)).status).toBe(200);
+
+      // Real upgrade/downgrade via SaaS API, keeping the same tenant token.
+      const basic=await db.plano.create({data:{nome:'Basic QA',tipo:'VAREJO_BASICO',precoMensal:1,modulosPadrao:['CAIXA_PDV','FIADOS']}});
+      const pro=await db.plano.create({data:{nome:'Pro QA',tipo:'VAREJO_PRO',precoMensal:2,modulosPadrao:['CAIXA_PDV','FIADOS','ENTREGAS_DELIVERY','ESTOQUE_LOTES','COMPRAS_FORNECEDORES','VASILHAMES_RETORNAVEIS','RELATORIOS_AVANCADOS']}});
+      try {
+        const planoPath='/saas/admin/empresas/'+company.id+'/plano';
+        expect((await request(server).patch(planoPath).set(adminToken).send({planoId:pro.id})).status).toBe(200);
+        expect((await request(server).get('/auth/modulos').set(tenantToken)).body.modulos.ENTREGAS_DELIVERY).toBe(true);
+        expect((await request(server).get('/vendas/pendentes-acerto-delivery').set(tenantToken)).status).toBe(200);
+        expect((await request(server).patch(planoPath).set(adminToken).send({planoId:basic.id})).status).toBe(200);
+        const downgraded=await request(server).get('/auth/modulos').set(tenantToken);
+        expect(downgraded.body.modulos.ENTREGAS_DELIVERY).toBe(false);
+        expect(downgraded.body.modulos.FIADOS).toBe(true);
+        expect((await request(server).get('/vendas/pendentes-acerto-delivery').set(tenantToken)).status).toBe(403);
+        expect((await request(server).patch(setting).set(adminToken).send({modulo:'ROTAS_CAMINHOES',ativo:true})).status).toBe(400);
+      } finally {
+        await db.empresa.update({where:{id:company.id},data:{planoId:billingPlanId}});
+        await db.plano.deleteMany({where:{id:{in:[basic.id,pro.id]}}});
+      }
     } finally {
       await db.funcionario.delete({where:{id:employee.id}});
     }
