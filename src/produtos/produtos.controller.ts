@@ -9,6 +9,7 @@ import {
   UseGuards,
   ParseIntPipe,
   Query,
+  Put,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -21,6 +22,7 @@ import {
 import { ProdutosService } from './produtos.service';
 import { CreateProdutoDto } from './dto/create-produto.dto';
 import { UpdateProdutoDto } from './dto/update-produto.dto';
+import { ProdutoFotoDto } from './dto/produto-foto.dto';
 import { JwtAuthGuard } from '../core/auth/jwt-auth.guard';
 import { TenantGuard } from '../common/guards/tenant.guard';
 import { ExigirPermissao, PermissoesGuard } from '../common/guards/permissoes.guard';
@@ -100,6 +102,23 @@ export class ProdutosController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.produtosService.findOne(id, empresaId);
+  }
+
+  @Get(':id/foto')
+  async foto(@CurrentTenant() empresaId: number, @Param('id', ParseIntPipe) id: number) {
+    return this.produtosService.obterFoto(id, empresaId);
+  }
+
+  @ExigirPermissao('PRODUTOS_GERENCIAR')
+  @Put(':id/foto')
+  async salvarFoto(@CurrentTenant() empresaId: number, @Param('id', ParseIntPipe) id: number, @Body() dto: ProdutoFotoDto) {
+    return this.produtosService.salvarFoto(id, empresaId, dto.base64);
+  }
+
+  @ExigirPermissao('PRODUTOS_GERENCIAR')
+  @Delete(':id/foto')
+  async excluirFoto(@CurrentTenant() empresaId: number, @Param('id', ParseIntPipe) id: number) {
+    return this.produtosService.excluirFoto(id, empresaId);
   }
 
   @ApiOperation({

@@ -435,6 +435,7 @@ model Produto {
   criadoEm          DateTime              @default(now())
   atualizadoEm      DateTime              @updatedAt
 
+  foto              ProdutoFoto?
   lotes             LoteProduto[]
   historicoCustos   HistoricoCusto[]
   itensVenda        ItemVenda[]
@@ -792,4 +793,11 @@ model ContaReceber {
   dataRecebimento DateTime?
   status          StatusConta @default(PENDENTE)
   criadoEm        DateTime    @default(now())
+}
+// A imagem fica separada para não aumentar o tamanho das listagens e do PDV.
+model ProdutoFoto {
+  produtoId Int @id
+  produto   Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  jpeg      Bytes
+  atualizadoEm DateTime @updatedAt
 }
