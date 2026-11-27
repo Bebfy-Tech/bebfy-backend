@@ -1,3 +1,5 @@
+import { AtualizarEntregaDto } from './dto/delivery.dto';
+import { validarTransicaoEntrega, resumoDelivery } from './delivery-regras';
 import { aplicarCasco } from '../../produtos/vasilhames/saldos';
 import { exigirCredito } from '../clientes/credito';
 import {
@@ -182,11 +184,13 @@ export class VendasService {
           tipoEntrega: createVendaDto.tipoEntrega || 'RETIRADA_BALCAO',
           status: StatusVenda.CONCLUIDA,
           statusAcerto,
+          statusEntrega:createVendaDto.tipoEntrega===TipoEntrega.DELIVERY?'PENDENTE':null,
           vasilhamesControlados:true,
           empresaId,
         },
       });
 
+      if(createVendaDto.tipoEntrega===TipoEntrega.DELIVERY)await tx.eventoEntrega.create({data:{vendaId:venda.id,status:'PENDENTE',operadorId:createVendaDto.funcionarioId}});
       for (const item of createVendaDto.itens) {
         const produto = await tx.produto.findFirst({where:{id:item.produtoId,empresaId,ativo:true}});
         if(!produto)throw new BadRequestException('Produto indisponível.');
@@ -285,42 +289,49 @@ export class VendasService {
     });
   }
 
-  async listarPendentesAcertoDelivery(empresaId: number) {
-    const vendas = await this.prisma.venda.findMany({
-      where: {
-        empresaId,
-        tipoEntrega: 'DELIVERY',
-        statusAcerto: StatusAcerto.PENDENTE,
-        status: StatusVenda.CONCLUIDA,
-      },
-      include: {
-        cliente: true,
-        funcionario: true,
-        pagamentos: true,
-      },
-      orderBy: { criadoEm: 'desc' },
-    });
-
-    const totalPendentes = vendas.reduce((acc, v) => acc + Number(v.valorTotal), 0);
-
-    return {
-      quantidade: vendas.length,
-      totalPendentes,
-      vendas,
-    };
+  async listarEntregas(empresaId:number){
+    const [vendas,entregadores]=await Promise.all([
+      this.prisma.venda.findMany({where:{empresaId,tipoEntrega:TipoEntrega.DELIVERY},include:{cliente:{select:{id:true,nome:true,codigoCliente:true,telefone:true}},funcionario:{select:{id:true,nome:true}},entregador:{select:{id:true,nome:true,codigo:true,telefone:true}},pagamentos:true,itens:{include:{produto:{select:{id:true,nome:true}}}},historicoEntrega:{orderBy:{criadoEm:'desc'}}},orderBy:{criadoEm:'desc'}}),
+      this.prisma.funcionario.findMany({where:{empresaId,cargo:'ENTREGADOR'},select:{id:true,nome:true,codigo:true,telefone:true,ativo:true},orderBy:{nome:'asc'}}),
+    ]);
+    return {vendas,entregadores};
   }
-
-  async confirmarAcertoDelivery(empresaId: number, vendaIds: string[]) {
+  async atualizarEntrega(empresaId:number,id:string,dto:AtualizarEntregaDto,operadorId:string){
+    return this.prisma.$transaction(async tx=>{
+      const venda=await tx.venda.findFirst({where:{id,empresaId,tipoEntrega:TipoEntrega.DELIVERY,status:StatusVenda.CONCLUIDA}});
+      if(!venda)throw new NotFoundException('Entrega não encontrada.');
+      if(venda.statusAcerto!==StatusAcerto.PENDENTE)throw new BadRequestException('Entrega já acertada.');
+      const entregadorId=dto.entregadorId??venda.entregadorId;
+      validarTransicaoEntrega(venda.statusEntrega,dto.status,entregadorId,dto.observacao);
+      if(venda.statusEntrega==='SAIU_PARA_ENTREGA'&&dto.entregadorId&&dto.entregadorId!==venda.entregadorId)throw new BadRequestException('Não é possível trocar o entregador durante a confirmação da rota.');
+      if(entregadorId&&(dto.entregadorId||dto.status==='SAIU_PARA_ENTREGA')){
+        if(!await tx.funcionario.findFirst({where:{id:entregadorId,empresaId,ativo:true,cargo:'ENTREGADOR'}}))throw new BadRequestException('Entregador ativo não encontrado nesta empresa.');
+      }
+      const r=await tx.venda.updateMany({where:{id,empresaId,status:StatusVenda.CONCLUIDA,statusAcerto:StatusAcerto.PENDENTE,statusEntrega:venda.statusEntrega,entregadorId:venda.entregadorId},data:{statusEntrega:dto.status,entregadorId,...(dto.status==='SAIU_PARA_ENTREGA'?{saidaEntregaEm:new Date()}:{}),...(dto.status==='ENTREGUE'?{entregueEm:venda.statusEntrega===null?null:new Date()}:{} )}});
+      if(r.count!==1)throw new BadRequestException('Entrega alterada durante a operação. Atualize.');
+      await tx.eventoEntrega.create({data:{vendaId:id,status:dto.status,entregadorId,operadorId,observacao:dto.observacao?.trim()||null}});
+      return {ok:true};
+    });
+  }
+  async listarPendentesAcertoDelivery(empresaId:number){
+    const vendas=await this.prisma.venda.findMany({where:{empresaId,tipoEntrega:TipoEntrega.DELIVERY,statusAcerto:StatusAcerto.PENDENTE,status:StatusVenda.CONCLUIDA},include:{cliente:true,funcionario:true,entregador:true,pagamentos:true},orderBy:{criadoEm:'desc'}});
+    const formas=resumoDelivery(vendas.flatMap(v=>v.pagamentos));
+    return {quantidade:vendas.length,totalPendentes:(formas.DINHEIRO+formas.PIX+formas.CARTAO_CREDITO+formas.CARTAO_DEBITO)/100,dinheiroPendente:formas.DINHEIRO/100,vendas};
+  }
+  async confirmarAcertoDelivery(empresaId:number,vendaIds:string[],dinheiroConferido:number,operadorId:string){
     if(!Array.isArray(vendaIds)||vendaIds.length<1||vendaIds.length>200||vendaIds.some(id=>typeof id!=='string'||!id.trim()))throw new BadRequestException('Informe de 1 a 200 vendas válidas.');
     const ids=[...new Set(vendaIds)];
     return this.prisma.$transaction(async tx=>{
-      const vendas=await tx.venda.findMany({where:{id:{in:ids},empresaId,tipoEntrega:TipoEntrega.DELIVERY,status:StatusVenda.CONCLUIDA,statusAcerto:StatusAcerto.PENDENTE},select:{id:true,caixaId:true}});
-      if(vendas.length!==ids.length)throw new BadRequestException('Há vendas inválidas ou já acertadas na seleção.');
+      const vendas=await tx.venda.findMany({where:{id:{in:ids},empresaId,tipoEntrega:TipoEntrega.DELIVERY,status:StatusVenda.CONCLUIDA,statusAcerto:StatusAcerto.PENDENTE,statusEntrega:'ENTREGUE'},include:{pagamentos:true}});
+      if(vendas.length!==ids.length)throw new BadRequestException('Selecione apenas entregas concluídas e pendentes de acerto.');
+      if(vendas.some(v=>!v.entregadorId)||new Set(vendas.map(v=>v.entregadorId)).size!==1)throw new BadRequestException('Selecione entregas de um mesmo entregador.');
+      const formas=resumoDelivery(vendas.flatMap(v=>v.pagamentos));
+      if(!Number.isFinite(dinheiroConferido)||Math.round(dinheiroConferido*100)!==formas.DINHEIRO)throw new BadRequestException('Dinheiro conferido difere do esperado. Concilie antes de confirmar.');
       for(const caixaId of [...new Set(vendas.map(v=>v.caixaId))].sort()){
         const lock=await tx.caixa.updateMany({where:{id:caixaId,empresaId,status:StatusCaixa.ABERTO},data:{status:StatusCaixa.ABERTO}});
         if(lock.count!==1)throw new BadRequestException('Entrega vinculada a caixa fechado exige conciliação separada.');
       }
-      const resultado=await tx.venda.updateMany({where:{id:{in:ids},empresaId,tipoEntrega:TipoEntrega.DELIVERY,status:StatusVenda.CONCLUIDA,statusAcerto:StatusAcerto.PENDENTE},data:{statusAcerto:StatusAcerto.CONCLUIDO}});
+      const resultado=await tx.venda.updateMany({where:{id:{in:ids},empresaId,tipoEntrega:TipoEntrega.DELIVERY,status:StatusVenda.CONCLUIDA,statusAcerto:StatusAcerto.PENDENTE,statusEntrega:'ENTREGUE',entregadorId:vendas[0].entregadorId},data:{statusAcerto:StatusAcerto.CONCLUIDO,acertoEm:new Date(),acertoOperadorId:operadorId}});
       if(resultado.count!==ids.length)throw new BadRequestException('Acerto alterado durante a operação. Atualize a lista.');
       return resultado;
     });

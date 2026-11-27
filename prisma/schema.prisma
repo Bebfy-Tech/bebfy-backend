@@ -356,6 +356,7 @@ model Funcionario {
   usuario        Usuario?
   vendas         Venda[]
   caixasFechados Caixa[]     @relation("OperadorCaixa")
+  entregas Venda[] @relation("EntregadorVenda")
 
   @@unique([empresaId, cpf])
   @@unique([empresaId, codigo])
@@ -677,6 +678,7 @@ enum StatusEntrega {
   SEPARANDO
   SAIU_PARA_ENTREGA
   ENTREGUE
+  NAO_ENTREGUE
 }
 
 enum StatusAcerto {
@@ -701,6 +703,13 @@ model Venda {
   status          StatusVenda      @default(CONCLUIDA)
   tipoEntrega     TipoEntrega      @default(RETIRADA_BALCAO)
   statusEntrega   StatusEntrega?
+  entregadorId String?
+  entregador Funcionario? @relation("EntregadorVenda",fields:[entregadorId],references:[id],onDelete:Restrict)
+  saidaEntregaEm DateTime?
+  entregueEm DateTime?
+  acertoEm DateTime?
+  acertoOperadorId String?
+  historicoEntrega EventoEntrega[]
   statusAcerto    StatusAcerto     @default(CONCLUIDO)
   taxaEntrega     Decimal          @default(0.00)
   enderecoEntrega String?
@@ -733,6 +742,18 @@ enum FormaPagamento {
   CARTAO_DEBITO
   CARTAO_CREDITO
   FIADO
+}
+
+model EventoEntrega {
+ id String @id @default(uuid())
+ vendaId String
+ venda Venda @relation(fields:[vendaId],references:[id],onDelete:Cascade)
+ status StatusEntrega
+ entregadorId String?
+ operadorId String?
+ observacao String?
+ criadoEm DateTime @default(now())
+ @@index([vendaId,criadoEm])
 }
 
 model PagamentoVenda {

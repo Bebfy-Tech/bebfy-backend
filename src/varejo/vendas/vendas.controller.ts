@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
   UseGuards,
@@ -20,6 +21,7 @@ import {
 import { VendasService } from './vendas.service';
 import { ComprovanteService } from './comprovante.service';
 import { CreateVendaDto } from './dto/create-venda.dto';
+import { AcertoDeliveryDto, AtualizarEntregaDto } from './dto/delivery.dto';
 import { ExigirPermissao, PermissoesGuard } from '../../common/guards/permissoes.guard';
 import { ExigirModulo, ModuloAtivoGuard } from '../../common/guards/modulo-ativo.guard';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
@@ -63,6 +65,17 @@ export class VendasController {
     return this.vendasService.findAll(empresaId);
   }
 
+  @ExigirModulo('ENTREGAS_DELIVERY')
+  @Get('delivery')
+  listarEntregas(@CurrentTenant() empresaId:number){return this.vendasService.listarEntregas(empresaId);}
+
+  @ExigirModulo('ENTREGAS_DELIVERY')
+  @ExigirPermissao('DELIVERY_ACERTAR')
+  @Patch(':id/entrega')
+  atualizarEntrega(@CurrentTenant() empresaId:number,@Param('id') id:string,@Body() dto:AtualizarEntregaDto,@Req() req:any){
+    return this.vendasService.atualizarEntrega(empresaId,id,dto,req.user.funcionarioId);
+  }
+
   @ApiOperation({
     summary: 'Listar vendas pendentes de acerto (Delivery)',
     description: 'Retorna vendas marcadas como delivery aguardando acerto de contas pelo entregador.',
@@ -85,9 +98,10 @@ export class VendasController {
   @HttpCode(HttpStatus.OK)
   async confirmarAcertoDelivery(
     @CurrentTenant() empresaId: number,
-    @Body('vendaIds') vendaIds: string[],
+    @Body() dto: AcertoDeliveryDto,
+    @Req() req:any,
   ) {
-    return this.vendasService.confirmarAcertoDelivery(empresaId, vendaIds);
+    return this.vendasService.confirmarAcertoDelivery(empresaId,dto.vendaIds,dto.dinheiroConferido,req.user.funcionarioId);
   }
 
   @ApiOperation({ summary: 'Comprovante comercial não fiscal para impressão' })
