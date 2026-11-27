@@ -6,7 +6,20 @@ import { UpdateFuncionarioDto } from './dto/update-funcionario.dto';
 import { ConfigurarAcessoDto } from './dto/configurar-acesso.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
+import { IsArray, IsString, ArrayMaxSize, IsBoolean } from 'class-validator';
+import { AtorFuncionario } from './funcionarios-regras';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
+
+class PermissoesDto {
+  @IsArray()
+  @ArrayMaxSize(30)
+  @IsString({ each: true })
+  permissoes: string[];
+}
+class SituacaoAcessoDto {
+  @IsBoolean()
+  ativo: boolean;
+}
 
 @ApiTags('Gestão & Equipa')
 @ApiBearerAuth('JWT-auth')
@@ -19,6 +32,11 @@ export class FuncionariosController {
     if (!['GERENTE', 'ADMINISTRADOR', 'PROPRIETARIO'].includes(req.user?.cargo)) {
       throw new ForbiddenException('Apenas gestores podem administrar funcionários.');
     }
+  }
+
+  private ator(req: any): AtorFuncionario {
+    if (!req.user?.id || !req.user?.funcionarioId) throw new ForbiddenException('Sessão de gestor inválida.');
+    return { id: req.user.id, funcionarioId: req.user.funcionarioId };
   }
 
   private validarCargoSolicitado(req: any, cargo?: string): void {
@@ -40,7 +58,7 @@ export class FuncionariosController {
   create(@CurrentTenant() empresaId: number, @Req() req: any, @Body() dto: CreateFuncionarioDto) {
     this.exigirGestor(req);
     this.validarCargoSolicitado(req, dto.cargo);
-    return this.funcionariosService.create(dto, empresaId);
+    return this.funcionariosService.create(dto, empresaId, this.ator(req));
   }
 
   @Get()
@@ -53,7 +71,25 @@ export class FuncionariosController {
   async configurarAcesso(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string, @Body() dto: ConfigurarAcessoDto) {
     this.exigirGestor(req);
     await this.validarAlvo(req, empresaId, id);
-    return this.funcionariosService.configurarAcesso(id, empresaId, dto);
+    return this.funcionariosService.configurarAcesso(id, empresaId, dto, this.ator(req));
+  }
+
+  @Patch(':id/permissoes')
+  permissoes(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string, @Body() dto: PermissoesDto) {
+    this.exigirGestor(req);
+    return this.funcionariosService.permissoes(id, empresaId, dto.permissoes, this.ator(req));
+  }
+
+  @Patch(':id/situacao-acesso')
+  situacaoAcesso(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string, @Body() dto: SituacaoAcessoDto) {
+    this.exigirGestor(req);
+    return this.funcionariosService.situacaoAcesso(id, empresaId, dto.ativo, this.ator(req));
+  }
+
+  @Post(':id/revogar-sessao')
+  revogarSessao(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string) {
+    this.exigirGestor(req);
+    return this.funcionariosService.revogarSessao(id, empresaId, this.ator(req));
   }
 
   @Get(':id')
@@ -67,13 +103,13 @@ export class FuncionariosController {
     this.exigirGestor(req);
     await this.validarAlvo(req, empresaId, id);
     this.validarCargoSolicitado(req, dto.cargo);
-    return this.funcionariosService.update(id, dto, empresaId);
+    return this.funcionariosService.update(id, dto, empresaId, this.ator(req));
   }
 
   @Delete(':id')
   async remove(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string) {
     this.exigirGestor(req);
     await this.validarAlvo(req, empresaId, id);
-    return this.funcionariosService.remove(id, empresaId);
+    return this.funcionariosService.remove(id, empresaId, this.ator(req));
   }
 }

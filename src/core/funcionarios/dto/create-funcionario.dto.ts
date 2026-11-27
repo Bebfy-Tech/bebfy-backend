@@ -6,6 +6,9 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Min,
+  Max,
+  MaxLength,
 } from 'class-validator';
 import { Cargo } from '@prisma/client';
 
@@ -13,11 +16,13 @@ export class CreateFuncionarioDto {
   // Nome completo do funcionário - Campo Obrigatório
   @IsString({ message: 'O nome deve ser um texto.' })
   @IsNotEmpty({ message: 'O nome do funcionário é obrigatório.' })
+  @MaxLength(200)
   nome: string;
 
   // CPF único do colaborador - Campo Obrigatório
   @IsString({ message: 'O CPF deve ser um texto.' })
   @IsNotEmpty({ message: 'O CPF é obrigatório.' })
+  @MaxLength(20)
   cpf: string;
 
   // Telefone/WhatsApp de contacto - Opcional
@@ -33,6 +38,8 @@ export class CreateFuncionarioDto {
   // Percentual ou valor de desconto máximo que este funcionário pode conceder na venda - Opcional
   @IsNumber({}, { message: 'O desconto máximo deve ser um valor numérico.' })
   @IsOptional()
+  @Min(0)
+  @Max(100)
   descontoMaximo?: number;
 
   // Define se o funcionário está ativo ou inativo na empresa - Opcional (Default: true)
