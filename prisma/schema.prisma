@@ -602,6 +602,20 @@ model HistoricoFiado {
   descricao String?
   saldoApos Decimal
   criadoEm  DateTime           @default(now())
+  formaCadastroId String?
+  formaCadastro CadastroFinanceiro? @relation("FormaFiado",fields:[formaCadastroId],references:[id],onDelete:Restrict)
+  formaNome String?
+  parcelasPagamento Int @default(1)
+  taxaPercentual Decimal?
+  valorTaxa Decimal?
+  valorLiquidoPrevisto Decimal?
+  prazoRecebimentoDias Int?
+  contaFinanceiraId String?
+  contaFinanceira CadastroFinanceiro? @relation("ContaFiado",fields:[contaFinanceiraId],references:[id],onDelete:Restrict)
+  contaFinanceiraNome String?
+  operadoraCadastroId String?
+  operadoraCadastro CadastroFinanceiro? @relation("OperadoraFiado",fields:[operadoraCadastroId],references:[id],onDelete:Restrict)
+  operadoraNome String?
 }
 
 // ====================================================
@@ -769,6 +783,20 @@ model PagamentoVenda {
   valor          Decimal
   troco          Decimal        @default(0.00)
   criadoEm       DateTime       @default(now())
+  formaCadastroId String?
+  formaCadastro CadastroFinanceiro? @relation("FormaVenda",fields:[formaCadastroId],references:[id],onDelete:Restrict)
+  formaNome String?
+  parcelasPagamento Int @default(1)
+  taxaPercentual Decimal?
+  valorTaxa Decimal?
+  valorLiquidoPrevisto Decimal?
+  prazoRecebimentoDias Int?
+  contaFinanceiraId String?
+  contaFinanceira CadastroFinanceiro? @relation("ContaVenda",fields:[contaFinanceiraId],references:[id],onDelete:Restrict)
+  contaFinanceiraNome String?
+  operadoraCadastroId String?
+  operadoraCadastro CadastroFinanceiro? @relation("OperadoraVenda",fields:[operadoraCadastroId],references:[id],onDelete:Restrict)
+  operadoraNome String?
 }
 
 // ====================================================
@@ -995,6 +1023,12 @@ model CadastroFinanceiro {
  contasReceber ContaReceber[] @relation("CategoriaReceber")
  baixas BaixaFinanceira[] @relation("FormaBaixa")
  baixasConta BaixaFinanceira[] @relation("ContaBaixa")
+ pagamentosVenda PagamentoVenda[] @relation("FormaVenda")
+ pagamentosConta PagamentoVenda[] @relation("ContaVenda")
+ pagamentosOperadora PagamentoVenda[] @relation("OperadoraVenda")
+ recebimentosFiado HistoricoFiado[] @relation("FormaFiado")
+ recebimentosConta HistoricoFiado[] @relation("ContaFiado")
+ recebimentosOperadora HistoricoFiado[] @relation("OperadoraFiado")
  @@unique([empresaId,tipo,nomeNormalizado])
  @@index([empresaId,tipo,ativo])
 }

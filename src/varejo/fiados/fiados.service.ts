@@ -1,3 +1,4 @@
+import { formasOperacionais, resolverPagamento } from '../../financeiro/pagamentos-operacionais';
 import { exigirCredito } from '../clientes/credito';
 import {
   Injectable,
@@ -71,13 +72,17 @@ export class FiadosService {
     });
   }
 
+  async formasPagamento(empresaId:number){
+    const formas=await this.prisma.$transaction(tx=>formasOperacionais(tx,empresaId,'fiado'));
+    return formas.map(f=>({id:f.id,nome:f.nome,formaPagamento:f.formaBase,maxParcelas:f.maxParcelas,taxas:f.taxas}));
+  }
   async registrarPagamento(empresaId: number, clienteId: string, dto: PagarFiadoDto) {
     return this.prisma.$transaction(async (tx) => {
       const replay = async () => {
         if(!dto.chaveRecebimento)return null;
         const anterior=await tx.historicoFiado.findFirst({where:{chaveRecebimento:dto.chaveRecebimento,clienteId,cliente:{empresaId}}});
         if(!anterior)return null;
-        if(!anterior.valor.equals(dto.valor)||anterior.formaRecebimento!==dto.formaPagamento||(anterior.caixaRecebimentoId??null)!==(dto.caixaId??null))throw new ConflictException('Chave de recebimento já utilizada com outros dados.');
+        if(!anterior.valor.equals(dto.valor)||anterior.formaRecebimento!==dto.formaPagamento||(dto.formaCadastroId&&anterior.formaCadastroId!==dto.formaCadastroId)||anterior.parcelasPagamento!==(dto.parcelas??1)||(anterior.caixaRecebimentoId??null)!==(dto.caixaId??null))throw new ConflictException('Chave de recebimento já utilizada com outros dados.');
         return {sucesso:true,saldoDevedorAtual:Number(anterior.saldoApos),historico:anterior};
       };
       const anterior=await replay();if(anterior)return anterior;
@@ -115,12 +120,14 @@ export class FiadosService {
       });
       const novoSaldo = Number(clienteAtualizado.saldoDevedor);
 
+      const snapshot=await resolverPagamento(tx,empresaId,'fiado',dto.formaPagamento as FormaPagamento,dto.formaCadastroId,dto.parcelas??1,dto.valor);
       const historico = await tx.historicoFiado.create({
         data: {
           clienteId,
           tipo: TipoTransacaoFiado.CREDITO,
           origem: 'RECEBIMENTO',
           formaRecebimento: dto.formaPagamento as FormaPagamento,
+          ...snapshot,
           caixaRecebimentoId: dto.caixaId,
           chaveRecebimento: dto.chaveRecebimento,
           valor: dto.valor,

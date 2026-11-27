@@ -104,6 +104,9 @@ export class VendasController {
     return this.vendasService.confirmarAcertoDelivery(empresaId,dto.vendaIds,dto.dinheiroConferido,req.user.funcionarioId);
   }
 
+  @Get('formas-pagamento')
+  formasPagamento(@CurrentTenant() empresaId:number){return this.vendasService.formasPagamento(empresaId);}
+
   @ApiOperation({ summary: 'Comprovante comercial não fiscal para impressão' })
   @Get(':id/comprovante')
   obterComprovante(@CurrentTenant() empresaId: number, @Param('id') id: string) {

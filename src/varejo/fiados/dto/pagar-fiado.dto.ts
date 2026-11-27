@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsPositive, IsString, IsIn, IsUUID } from 'class-validator';
+import { IsNumber, IsOptional, IsPositive, IsString, IsIn, IsUUID, IsInt, Min, Max } from 'class-validator';
 
 export class PagarFiadoDto {
   @IsNumber({maxDecimalPlaces:2}, { message: 'O valor do pagamento deve ser um número.' })
@@ -7,6 +7,8 @@ export class PagarFiadoDto {
 
   @IsIn(['DINHEIRO','PIX','CARTAO_DEBITO','CARTAO_CREDITO'])
   formaPagamento: string;
+  @IsOptional() @IsString() formaCadastroId?:string;
+  @IsOptional() @IsInt() @Min(1) @Max(24) parcelas?:number;
 
   @IsOptional()
   @IsString({ message: 'O ID do caixa deve ser um texto/UUID.' })

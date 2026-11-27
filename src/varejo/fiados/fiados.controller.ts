@@ -63,6 +63,9 @@ export class FiadosController {
     return this.fiadosService.findAll(empresaId);
   }
 
+  @Get('formas-pagamento')
+  formasPagamento(@CurrentTenant() empresaId:number){return this.fiadosService.formasPagamento(empresaId);}
+
   @ApiOperation({
     summary: 'Obter histórico de fiado de um cliente',
     description: 'Retorna a ficha completa de débitos e créditos de fiado do cliente.',

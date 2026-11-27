@@ -1,3 +1,4 @@
+import { formasOperacionais, resolverPagamento } from '../../financeiro/pagamentos-operacionais';
 import { AtualizarEntregaDto } from './dto/delivery.dto';
 import { validarTransicaoEntrega, resumoDelivery } from './delivery-regras';
 import { aplicarCasco } from '../../produtos/vasilhames/saldos';
@@ -24,6 +25,11 @@ import {
 export class VendasService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async formasPagamento(empresaId:number){
+    const modulos=await consultarModulos(this.prisma,empresaId);
+    const formas=await this.prisma.$transaction(tx=>formasOperacionais(tx,empresaId,'pdv'));
+    return formas.filter(f=>!f.fiado||modulos.FIADOS).map(f=>({id:f.id,nome:f.nome,formaPagamento:f.fiado?'FIADO':f.formaBase,maxParcelas:f.maxParcelas,taxas:f.taxas}));
+  }
   async create(empresaId: number, createVendaDto: CreateVendaDto) {
     // The same entitlement resolver also protects optional actions inside the PDV.
     const modulos = await consultarModulos(this.prisma, empresaId);
@@ -226,12 +232,14 @@ export class VendasService {
       }
 
       for (const pag of createVendaDto.pagamentos) {
+        const snapshot=await resolverPagamento(tx,empresaId,'pdv',pag.formaPagamento,pag.formaCadastroId,pag.parcelas??1,Math.round((pag.valor-(pag.troco??0))*100)/100);
         await tx.pagamentoVenda.create({
           data: {
             vendaId: venda.id,
             formaPagamento: pag.formaPagamento,
             valor: pag.valor,
             troco: pag.troco || 0,
+            ...snapshot,
           },
         });
       }

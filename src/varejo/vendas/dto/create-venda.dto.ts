@@ -9,6 +9,7 @@ import {
   IsNumber,
   IsPositive,
   Min,
+  Max,
   ArrayMinSize,
   IsOptional,
   IsString,
@@ -51,6 +52,8 @@ export class CreatePagamentoVendaDto {
   @IsNumber({maxDecimalPlaces:2}, { message: 'O troco deve ser um número.' })
   @Min(0)
   troco?: number;
+  @IsOptional() @IsString() formaCadastroId?:string;
+  @IsOptional() @IsInt() @Min(1) @Max(24) parcelas?:number;
 }
 
 export class DevolucaoCascoDto {

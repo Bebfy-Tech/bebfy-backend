@@ -43,7 +43,8 @@ export class CadastrosFinanceirosService{
  }
  private async usados(tx:Tx,id:string){
   const [p,r,b,bc]=await Promise.all([tx.contaPagar.count({where:{categoriaCadastroId:id}}),tx.contaReceber.count({where:{categoriaCadastroId:id}}),tx.baixaFinanceira.count({where:{formaCadastroId:id}}),tx.baixaFinanceira.count({where:{contaFinanceiraId:id}})]);
-  return p+r+b+bc>0;
+  const [v,f]=await Promise.all([tx.pagamentoVenda.count({where:{OR:[{formaCadastroId:id},{contaFinanceiraId:id},{operadoraCadastroId:id}]}}),tx.historicoFiado.count({where:{OR:[{formaCadastroId:id},{contaFinanceiraId:id},{operadoraCadastroId:id}]}})]);
+  return p+r+b+bc+v+f>0;
  }
  private async dependentes(tx:Tx,empresaId:number,id:string,ativos:boolean){return tx.cadastroFinanceiro.count({where:{empresaId,...(ativos?{ativo:true}:{}),OR:[{bancoId:id},{contaId:id},{operadoraId:id}]}});}
  private conflito(e:unknown):never{if(e instanceof Prisma.PrismaClientKnownRequestError&&['P2002','P2003'].includes(e.code))throw new ConflictException('Nome já cadastrado ou registro vinculado.');throw e;}
