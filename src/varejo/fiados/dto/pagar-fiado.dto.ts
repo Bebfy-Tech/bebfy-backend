@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsPositive, IsString, IsIn } from 'class-validator';
+import { IsNumber, IsOptional, IsPositive, IsString, IsIn, IsUUID } from 'class-validator';
 
 export class PagarFiadoDto {
   @IsNumber({maxDecimalPlaces:2}, { message: 'O valor do pagamento deve ser um número.' })
@@ -11,4 +11,9 @@ export class PagarFiadoDto {
   @IsOptional()
   @IsString({ message: 'O ID do caixa deve ser um texto/UUID.' })
   caixaId?: string;
+
+  // Client-generated idempotency key; existing clients may omit it.
+  @IsOptional()
+  @IsUUID('4')
+  chaveRecebimento?: string;
 }

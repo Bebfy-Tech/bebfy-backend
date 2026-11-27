@@ -540,6 +540,7 @@ enum ModalidadeCredito {
 }
 
 model Cliente {
+  codigoCliente Int              @unique @default(autoincrement())
   id            String           @id @default(uuid())
   empresaId     Int
   empresa       Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
@@ -569,7 +570,19 @@ enum TipoTransacaoFiado {
   CREDITO
 }
 
+enum OrigemFiado {
+  VENDA
+  RECEBIMENTO
+  ESTORNO
+  AJUSTE_MANUAL
+  LEGADO
+}
+
 model HistoricoFiado {
+  origem OrigemFiado @default(LEGADO)
+  formaRecebimento FormaPagamento?
+  caixaRecebimentoId String?
+  chaveRecebimento String? @unique
   id        String             @id @default(uuid())
   clienteId String
   cliente   Cliente            @relation(fields: [clienteId], references: [id], onDelete: Cascade)

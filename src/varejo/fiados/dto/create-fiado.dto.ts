@@ -28,7 +28,7 @@ export class CreateFiadoDto {
   tipo: TipoTransacaoFiado;
 
   // Valor do lançamento em reais (R$) - Campo Obrigatório
-  @IsNumber({}, { message: 'O valor deve ser um número válido.' })
+  @IsNumber({maxDecimalPlaces:2}, { message: 'O valor deve ser um número válido.' })
   @IsNotEmpty({ message: 'O valor da transação é obrigatório.' })
   @IsPositive()
   valor: number;

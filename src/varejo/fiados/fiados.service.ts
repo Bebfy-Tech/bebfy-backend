@@ -8,7 +8,7 @@ import {
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CreateFiadoDto } from './dto/create-fiado.dto';
 import { PagarFiadoDto } from './dto/pagar-fiado.dto';
-import { TipoTransacaoFiado, TipoMovimentacaoCaixa } from '@prisma/client';
+import { TipoTransacaoFiado, TipoMovimentacaoCaixa, FormaPagamento } from '@prisma/client';
 
 @Injectable()
 export class FiadosService {
@@ -62,6 +62,7 @@ export class FiadosService {
           clienteId: createFiadoDto.clienteId,
           vendaId: createFiadoDto.vendaId,
           tipo: createFiadoDto.tipo,
+          origem: 'AJUSTE_MANUAL',
           valor: createFiadoDto.valor,
           descricao: createFiadoDto.descricao,
           saldoApos: novoSaldo,
@@ -72,11 +73,23 @@ export class FiadosService {
 
   async registrarPagamento(empresaId: number, clienteId: string, dto: PagarFiadoDto) {
     return this.prisma.$transaction(async (tx) => {
+      const replay = async () => {
+        if(!dto.chaveRecebimento)return null;
+        const anterior=await tx.historicoFiado.findFirst({where:{chaveRecebimento:dto.chaveRecebimento,clienteId,cliente:{empresaId}}});
+        if(!anterior)return null;
+        if(!anterior.valor.equals(dto.valor)||anterior.formaRecebimento!==dto.formaPagamento||(anterior.caixaRecebimentoId??null)!==(dto.caixaId??null))throw new ConflictException('Chave de recebimento já utilizada com outros dados.');
+        return {sucesso:true,saldoDevedorAtual:Number(anterior.saldoApos),historico:anterior};
+      };
+      const anterior=await replay();if(anterior)return anterior;
       // Synchronize with closing, using the same lock ordering as sales.
       if(dto.caixaId){
         const lock=await tx.caixa.updateMany({where:{id:dto.caixaId,empresaId,status:'ABERTO'},data:{status:'ABERTO'}});
         if(lock.count!==1)throw new BadRequestException('Caixa informado não está aberto nesta empresa.');
       }
+      // Serialize receipts and recheck the key after acquiring the customer row lock.
+      const travado=await tx.cliente.updateMany({where:{id:clienteId,empresaId,ativo:true},data:{ativo:true}});
+      const repetido=await replay();if(repetido)return repetido;
+      if(travado.count!==1)throw new NotFoundException('Cliente não encontrado nesta empresa.');
       const cliente = await tx.cliente.findFirst({
         where: { id: clienteId, empresaId, ativo: true },
       });
@@ -106,6 +119,10 @@ export class FiadosService {
         data: {
           clienteId,
           tipo: TipoTransacaoFiado.CREDITO,
+          origem: 'RECEBIMENTO',
+          formaRecebimento: dto.formaPagamento as FormaPagamento,
+          caixaRecebimentoId: dto.caixaId,
+          chaveRecebimento: dto.chaveRecebimento,
           valor: dto.valor,
           descricao: `Baixa de fiado no balcão - Forma: ${dto.formaPagamento}`,
           saldoApos: novoSaldo,
@@ -160,7 +177,7 @@ export class FiadosService {
 
   async findByCliente(empresaId: number, clienteId: string) {
     const cliente = await this.prisma.cliente.findFirst({
-      where: { id: clienteId, empresaId, ativo: true },
+      where: { id: clienteId, empresaId },
     });
 
     if (!cliente) {
