@@ -3,11 +3,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { InventariosService } from './inventarios.service';
 
 const data = new Date('2026-11-27T12:00:00Z');
-function fixture(contagem: number | null = 7, saldo = 10, lotes = 0) {
-  const inv = { id: 'inv', empresaId: 1, revisao: 0, status: 'ABERTO', itens: [{ produtoId: 2, nome: 'Produto', saldoInicial: 10, contagem, produtoAtualizadoEm: data }] };
+function fixture(contagem: number | null = 7, saldo = 10, lotes = 0, conferencia: unknown = null) {
+  const inv = { id: 'inv', empresaId: 1, revisao: 0, status: 'ABERTO', itens: [{ produtoId: 2, nome: 'Produto', saldoInicial: 10, contagem, produtoAtualizadoEm: data, lotesConferencia: conferencia }] };
   const tx = {
     inventarioEstoque: { findFirst: vi.fn().mockResolvedValue(inv), updateMany: vi.fn().mockResolvedValue({ count: 1 }), update: vi.fn().mockResolvedValue(inv) },
-    produto: { findMany: vi.fn().mockResolvedValue([{ id: 2, nome: 'Produto', estoqueAtual: saldo, atualizadoEm: data, _count: { lotes } }]), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    produto: { findMany: vi.fn().mockResolvedValue([{ id: 2, nome: 'Produto', estoqueAtual: saldo, atualizadoEm: data, _count: { lotes }, lotes: lotes ? [{ id: 3, numeroLote: 'A', dataVencimento: null, quantidade: 10 }] : [] }]), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    empresa: { findUniqueOrThrow: vi.fn().mockResolvedValue({ plano: null, modulosAtivos: [] }) },
+    loteProduto: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     movimentacaoEstoque: { create: vi.fn().mockResolvedValue({}) },
     itemInventarioEstoque: { update: vi.fn().mockResolvedValue({}) },
   };
@@ -53,5 +55,33 @@ describe('InventariosService', () => {
     await service.encerrar(1, 'inv', 0, 'Cancelamento', 'gestor', true);
     expect(tx.produto.updateMany).not.toHaveBeenCalled();
     expect(tx.inventarioEstoque.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'CANCELADO' }) }));
+  });
+});
+
+describe('Conferência por lote', () => {
+  const lote = { loteId: 3, numeroLote: 'A', validade: null, saldoInicial: 10, contagem: 7, contadoPorId: 'operador', contadoEm: data.toISOString() };
+  it('reconcilia lote e produto na mesma transação', async () => {
+    const { tx, service } = fixture(7, 10, 1, [lote]);
+    await service.encerrar(1, 'inv', 0, 'Conferência', 'gestor');
+    expect(tx.loteProduto.updateMany).toHaveBeenCalledWith({ where: { id: 3, empresaId: 1, produtoId: 2, quantidade: 10 }, data: { quantidade: 7 } });
+    expect(tx.movimentacaoEstoque.create).toHaveBeenCalledTimes(1);
+  });
+  it('rejeita soma dos lotes maior que o saldo físico', async () => {
+    const { tx, service } = fixture(6, 10, 1, [lote]);
+    await expect(service.encerrar(1, 'inv', 0, 'Conferência', 'gestor')).rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.loteProduto.updateMany).not.toHaveBeenCalled();
+  });
+  it('registra redistribuição de lote sem saída fictícia', async () => {
+    const { tx, service } = fixture(10, 10, 1, [lote]);
+    await service.encerrar(1, 'inv', 0, 'Conferência', 'gestor');
+    expect(tx.loteProduto.updateMany).toHaveBeenCalledTimes(1);
+    expect(tx.movimentacaoEstoque.create).not.toHaveBeenCalled();
+  });
+  it('rejeita lote não contado e lote alterado', async () => {
+    const a = fixture(7, 10, 1, [{ ...lote, contagem: null }]);
+    await expect(a.service.encerrar(1, 'inv', 0, 'Conferência', 'gestor')).rejects.toBeInstanceOf(BadRequestException);
+    const b = fixture(7, 10, 1, [{ ...lote, saldoInicial: 9 }]);
+    await expect(b.service.encerrar(1, 'inv', 0, 'Conferência', 'gestor')).rejects.toBeInstanceOf(ConflictException);
+    expect(b.tx.loteProduto.updateMany).not.toHaveBeenCalled();
   });
 });

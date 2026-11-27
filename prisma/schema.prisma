@@ -1263,6 +1263,7 @@ model ItemInventarioEstoque {
   codigoBarras String?
   saldoInicial Int
   produtoAtualizadoEm DateTime
+  lotesConferencia Json?
   contagem Int?
   contadoPorId String?
   contadoEm DateTime?
