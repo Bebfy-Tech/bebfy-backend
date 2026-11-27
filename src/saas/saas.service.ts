@@ -1,3 +1,4 @@
+import { inicializarUnidades } from '../produtos/unidades-medida';
 import { inicializarCadastros } from '../financeiro/cadastros-padroes';
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../core/prisma/prisma.service';
@@ -88,6 +89,7 @@ export class SaasService {
         },
       });
       await inicializarCadastros(tx,empresa.id);
+      await inicializarUnidades(tx,empresa.id);
       // Plan modules are inherited; EmpresaModulo stores only manual exceptions.
       await tx.configGlobal.create({
         data: {

@@ -108,6 +108,8 @@ model Empresa {
   movimentacoesCasco   MovimentacaoCasco[]
   tiposVasilhame TipoVasilhame[]
   movimentosFinanceiros MovimentoFinanceiro[]
+  unidadesMedida UnidadeMedida[]
+  unidadesInicializadas Boolean @default(false)
   cadastrosFinanceiros CadastroFinanceiro[]
   auditoriaCadastrosFinanceiros AuditoriaCadastroFinanceiro[]
   cadastrosFinanceirosInicializados Boolean @default(false)
@@ -434,6 +436,11 @@ model Produto {
   cest               String? @db.VarChar(7)
   ml                Int?
   unidadeMedida     String                @default("UN")
+  unidadeMedidaId String?
+  unidadeCadastro UnidadeMedida? @relation("UnidadeProduto",fields:[unidadeMedidaId],references:[id],onDelete:Restrict)
+  unidadeEmbalagemId String?
+  unidadeEmbalagem UnidadeMedida? @relation("EmbalagemProduto",fields:[unidadeEmbalagemId],references:[id],onDelete:Restrict)
+  unidadeEmbalagemSigla String?
   fardoQuantidade   Int?                  @default(1)
   precoCusto        Decimal               @default(0.00)
   precoVendaVarejo  Decimal               @default(0.00)
@@ -458,6 +465,8 @@ model Produto {
   movimentacoes     MovimentacaoEstoque[]
   movimentacoesCasco MovimentacaoCasco[]
 
+  @@index([unidadeMedidaId])
+  @@index([unidadeEmbalagemId])
   @@unique([empresaId, codigoBarras])
   @@index([empresaId, codigoBarras])
 }
@@ -1078,4 +1087,27 @@ model MovimentoFinanceiro {
  @@index([empresaId,criadoEm])
  @@index([pagamentoVendaId])
  @@index([historicoFiadoId])
+}
+
+enum TipoUnidadeMedida {
+ CONTAGEM
+ EMBALAGEM
+ PESO
+ VOLUME
+ OUTROS
+}
+model UnidadeMedida {
+ id String @id @default(uuid())
+ empresaId Int
+ empresa Empresa @relation(fields:[empresaId],references:[id],onDelete:Restrict)
+ sigla String
+ descricao String
+ tipo TipoUnidadeMedida
+ ativo Boolean @default(true)
+ criadoEm DateTime @default(now())
+ atualizadoEm DateTime @updatedAt
+ produtosBase Produto[] @relation("UnidadeProduto")
+ produtosEmbalagem Produto[] @relation("EmbalagemProduto")
+ @@unique([empresaId,sigla])
+ @@index([empresaId,ativo])
 }

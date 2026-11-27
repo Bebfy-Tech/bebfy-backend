@@ -11,8 +11,9 @@ describe('Identificação comercial e fiscal do produto', () => {
   it('aceita todos os campos e preserva zeros à esquerda', async () => {
     expect(await validate(Object.assign(new CreateProdutoDto(),dados))).toEqual([]);
     const create=vi.fn().mockResolvedValue(dados);
-    await new ProdutosService({produto:{create}} as any).create(dados,7);
-    expect(create).toHaveBeenCalledWith({data:{...dados,empresaId:7}});
+    const tx:any={produto:{create},empresa:{updateMany:vi.fn().mockResolvedValue({count:0})},unidadeMedida:{findFirst:vi.fn().mockResolvedValue({id:'un',sigla:'UN',tipo:'CONTAGEM'}),updateMany:vi.fn().mockResolvedValue({count:1})}};
+    await new ProdutosService({$transaction:(fn:any)=>fn(tx)} as any).create(dados,7);
+    expect(create).toHaveBeenCalledWith({data:{...dados,empresaId:7,unidadeMedidaId:'un',unidadeMedida:'UN',unidadeEmbalagemId:null,unidadeEmbalagemSigla:null}});
   });
   it('mantém compatibilidade com cadastro antigo', async () => {
     expect(await validate(Object.assign(new CreateProdutoDto(),{nome:'Teste',precoVendaVarejo:5}))).toEqual([]);
@@ -24,10 +25,11 @@ describe('Identificação comercial e fiscal do produto', () => {
   it('permite limpar campos opcionais na edição', async () => {
     expect(await validate(Object.assign(new UpdateProdutoDto(),{ncm:null,cest:null,marca:null}))).toEqual([]);
     const update=vi.fn().mockResolvedValue({});
-    const findFirst=vi.fn().mockResolvedValue({id:1});
-    await new ProdutosService({produto:{findFirst,update}} as any).update(1,{ncm:null,cest:null,marca:null},7);
+    const findFirst=vi.fn().mockResolvedValue({id:1,unidadeMedida:'UN',unidadeMedidaId:'un',fardoQuantidade:1});
+    const tx:any={produto:{findFirst,update},empresa:{updateMany:vi.fn().mockResolvedValue({count:0})}};
+    await new ProdutosService({$transaction:(fn:any)=>fn(tx)} as any).update(1,{ncm:null,cest:null,marca:null},7);
     expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({where:{id:1,empresaId:7,ativo:true}}));
-    expect(update).toHaveBeenCalledWith({where:{id:1},data:{ncm:null,cest:null,marca:null}});
+    expect(update).toHaveBeenCalledWith({where:{id:1},data:{ncm:null,cest:null,marca:null,unidadeMedida:'UN',unidadeMedidaId:'un',unidadeEmbalagemId:null,unidadeEmbalagemSigla:null}});
   });
   it('lê NCM e CEST como texto no preview do XML sem atualizar produto', async () => {
     const findMany=vi.fn().mockResolvedValue([]);

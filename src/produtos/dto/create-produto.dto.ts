@@ -66,6 +66,9 @@ export class CreateProdutoDto {
   @IsOptional()
   unidadeMedida?: string;
 
+  @IsOptional() @IsString() unidadeMedidaId?:string;
+  @IsOptional() @IsString() unidadeEmbalagemId?:string|null;
+
   // Quantidade de garrafas/latas por fardo ou caixa fechada - Opcional
   @IsInt({ message: 'A quantidade por fardo deve ser um número inteiro.' })
   @IsOptional()

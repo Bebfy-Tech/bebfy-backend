@@ -1,3 +1,5 @@
+import { Prisma } from '@prisma/client';
+import { inicializarUnidades, normalizarSigla, unidadeAtiva } from './unidades-medida';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateProdutoDto } from './dto/create-produto.dto';
 import { UpdateProdutoDto } from './dto/update-produto.dto';
@@ -8,11 +10,10 @@ export class ProdutosService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createProdutoDto: CreateProdutoDto, empresaId: number) {
-    return this.prisma.produto.create({
-      data: {
-        ...createProdutoDto,
-        empresaId,
-      },
+    return this.prisma.$transaction(async tx=>{
+      await inicializarUnidades(tx,empresaId);
+      const dados=await this.validarUnidades(tx,empresaId,createProdutoDto);
+      return tx.produto.create({data:{...createProdutoDto,...dados,empresaId}});
     });
   }
 
@@ -177,12 +178,37 @@ export class ProdutosService {
   }
 
   async update(id: number, updateProdutoDto: UpdateProdutoDto, empresaId: number) {
-    await this.findOne(id, empresaId);
-
-    return this.prisma.produto.update({
-      where: { id },
-      data: updateProdutoDto,
+    return this.prisma.$transaction(async tx=>{
+      const old=await tx.produto.findFirst({where:{id,empresaId,ativo:true}});
+      if(!old)throw new NotFoundException('Produto não encontrado nesta empresa.');
+      await inicializarUnidades(tx,empresaId);
+      const dados=await this.validarUnidades(tx,empresaId,updateProdutoDto,old);
+      return tx.produto.update({where:{id},data:{...updateProdutoDto,...dados}});
     });
+  }
+
+  // Unit identifiers are tenant-scoped; the legacy string remains a display snapshot.
+  private async validarUnidades(tx:Prisma.TransactionClient,empresaId:number,dto:UpdateProdutoDto,old?:{unidadeMedida:string;unidadeMedidaId:string|null;unidadeEmbalagemId:string|null;fardoQuantidade:number|null;estoqueAtual:number;id:number}){
+    const data:Prisma.ProdutoUncheckedUpdateInput={};
+    const baseAlterada=!old||dto.unidadeMedidaId!==undefined&&dto.unidadeMedidaId!==old.unidadeMedidaId||dto.unidadeMedida!==undefined&&dto.unidadeMedida!==old.unidadeMedida;
+    if(baseAlterada){
+      const u=await unidadeAtiva(tx,empresaId,dto.unidadeMedidaId?{id:dto.unidadeMedidaId}:{sigla:normalizarSigla(dto.unidadeMedida??'UN')});
+      if(old&&normalizarSigla(u.sigla)!==old.unidadeMedida.trim().toUpperCase()){
+        const historico=await tx.itemVenda.count({where:{produtoId:old.id}});
+        const movimentos=await tx.movimentacaoEstoque.count({where:{produtoId:old.id}});
+        const lotes=await tx.loteProduto.count({where:{produtoId:old.id}});
+        if(old.estoqueAtual!==0||historico||movimentos||lotes)throw new BadRequestException('Não altere a unidade de estoque de produto com saldo ou histórico. Cadastre outro produto.');
+      }
+      data.unidadeMedidaId=u.id;data.unidadeMedida=u.sigla;
+    }else if(old){data.unidadeMedidaId=old.unidadeMedidaId;data.unidadeMedida=old.unidadeMedida;}
+    const qtd=dto.fardoQuantidade??old?.fardoQuantidade??1;
+    if(!Number.isInteger(qtd)||qtd<1)throw new BadRequestException('Quantidade por embalagem deve ser inteira e positiva.');
+    if(qtd===1){data.unidadeEmbalagemId=null;data.unidadeEmbalagemSigla=null;}
+    else if(!old||dto.unidadeEmbalagemId!==undefined&&dto.unidadeEmbalagemId!==old.unidadeEmbalagemId||!old.unidadeEmbalagemId){
+      const u=await unidadeAtiva(tx,empresaId,dto.unidadeEmbalagemId?{id:dto.unidadeEmbalagemId}:{sigla:'FD'},true);
+      data.unidadeEmbalagemId=u.id;data.unidadeEmbalagemSigla=u.sigla;
+    }
+    return data as {unidadeMedidaId?:string|null;unidadeMedida?:string;unidadeEmbalagemId?:string|null;unidadeEmbalagemSigla?:string|null};
   }
 
   async remove(id: number, empresaId: number) {
