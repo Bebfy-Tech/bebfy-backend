@@ -481,6 +481,8 @@ model LoteProduto {
   produtoId      Int
   produto        Produto   @relation(fields: [produtoId], references: [id], onDelete: Cascade)
   numeroLote     String?
+  itemRecebimentoId String? @unique
+  itemRecebimento ItemRecebimentoCompra? @relation(fields:[itemRecebimentoId],references:[id],onDelete:Restrict)
   quantidade     Int
   dataVencimento DateTime?
   criadoEm       DateTime  @default(now())
@@ -931,6 +933,9 @@ model ContaPagar {
   totalParcelas Int?
   chaveLancamento String? @unique
   baixas BaixaFinanceira[]
+  recebimentoCompraId String?
+  recebimentoCompra RecebimentoCompra? @relation(fields:[recebimentoCompraId],references:[id],onDelete:Restrict)
+  @@index([recebimentoCompraId])
   @@index([empresaId,status,dataVencimento])
  categoriaCadastroId String?
  categoriaCadastro CadastroFinanceiro? @relation("CategoriaPagar",fields:[categoriaCadastroId],references:[id],onDelete:Restrict)
@@ -1195,6 +1200,10 @@ model RecebimentoCompra {
   chaveOperacao String @unique
   criadoEm DateTime @default(now())
   itens ItemRecebimentoCompra[]
+  contasPagar ContaPagar[]
+  chaveNfe String?
+  assinatura String @default("")
+  @@unique([empresaId,chaveNfe])
   @@index([compraId])
   @@index([empresaId,criadoEm])
 }
@@ -1209,5 +1218,9 @@ model ItemRecebimentoCompra {
   valor Decimal
   estoqueAnterior Int
   estoquePosterior Int
+  custoAnterior Decimal @default(0)
+  custoNovo Decimal @default(0)
+  custoUnitario Decimal @default(0)
+  lote LoteProduto?
   @@unique([recebimentoId,itemCompraId])
 }
