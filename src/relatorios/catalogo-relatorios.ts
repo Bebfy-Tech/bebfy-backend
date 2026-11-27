@@ -14,7 +14,7 @@ export const RELATORIOS: Def[] = [
  {codigo:'010',nome:'Contas a receber em aberto',grupo:'Financeiro',descricao:'Títulos pendentes, saldo e vencimento.',periodo:false,modulos:[]},
  {codigo:'011',nome:'Fechamentos de caixa',grupo:'Vendas e caixa',descricao:'Valores de fechamento e diferenças por operador.',periodo:true,modulos:['CAIXA_PDV']},
  {codigo:'012',nome:'Recebimentos de compras',grupo:'Estoque e compras',descricao:'Mercadorias recebidas, fornecedores e valores, sem estornos.',periodo:true,modulos:['COMPRAS_FORNECEDORES']},
- {codigo:'013',nome:'DRE gerencial estimada',grupo:'Financeiro',descricao:'Receita de vendas, CMV estimado e despesas classificadas por vencimento.',periodo:true,modulos:['CAIXA_PDV']},
+ {codigo:'013',nome:'DRE gerencial estimada',grupo:'Financeiro',descricao:'Receita de vendas, CMV histórico e estimativa legada, despesas classificadas por vencimento.',periodo:true,modulos:['CAIXA_PDV']},
 ];
 export const permissaoRelatorio=(codigo:string)=>'RELATORIO_'+codigo;
 export function podeRelatorio(codigo:string,user:{cargo?:string;permissoes?:string[]}) {

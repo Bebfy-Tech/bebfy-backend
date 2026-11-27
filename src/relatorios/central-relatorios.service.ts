@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../core/prisma/prisma.service';
 import { consultarModulos } from '../common/modulos/plano-modulos';
+import { calcularCmv } from './dre-cmv';
 import { RELATORIOS, podeRelatorio, periodoRelatorio, reposicao } from './catalogo-relatorios';
 type Celula=string|number|null;
 type Linha=Record<string,Celula>;
@@ -85,23 +86,23 @@ export class CentralRelatoriosService {
    const rows=limite(await this.prisma.recebimentoCompra.findMany({where:{empresaId,estornadoEm:null,criadoEm:p,compra:{empresaId}},include:{compra:{select:{codigoCompra:true,fornecedorNome:true}}},orderBy:{criadoEm:'desc'},take:MAX+1}));
    colunas=[col('codigo','Compra'),col('data','Recebimento','datetime'),col('fornecedor','Fornecedor'),money('valor','Valor recebido')];linhas=rows.map(x=>({codigo:x.compra.codigoCompra,data:x.criadoEm.toISOString(),fornecedor:x.compra.fornecedorNome,valor:x.total.toFixed(2)}));resumo=[{label:'Total recebido',valor:total(linhas,'valor'),tipo:'money'}];
   }else if(codigo==='013'){
-   // Estimativa gerencial: não há custo histórico por item vendido nem competência contábil.
+   // Custo histórico nas novas vendas; estimativa explícita para registros legados.
    const [v,itens,despesas,taxas]=await this.prisma.$transaction([
     this.prisma.venda.aggregate({where:venda,_sum:{subtotal:true,desconto:true,taxaEntrega:true,valorTotal:true}}),
-    this.prisma.itemVenda.findMany({where:{venda,produto:{empresaId}},select:{unidadesEstoque:true,quantidade:true,produto:{select:{precoCusto:true}}},take:MAX+1}),
+    this.prisma.itemVenda.findMany({where:{venda,produto:{empresaId}},select:{unidadesEstoque:true,quantidade:true,custoHistorico:{select:{custoUnitario:true}},produto:{select:{precoCusto:true}}},take:MAX+1}),
     this.prisma.contaPagar.findMany({where:{empresaId,status:{not:'CANCELADO'},notaFiscalId:null,recebimentoCompraId:null,dataVencimento:{gte:new Date(inicio+'T00:00:00Z'),lt:new Date(new Date(fim+'T00:00:00Z').getTime()+86400000)},categoriaCadastro:{empresaId,tipo:{in:['CUSTO_FIXO','CUSTO_VARIAVEL']}}},select:{valor:true,categoriaCadastro:{select:{tipo:true}}},take:MAX+1}),
     this.prisma.pagamentoVenda.aggregate({where:{venda},_sum:{valorTaxa:true}}),
    ],{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
    limite(itens);limite(despesas);
-   const receita=dec(v._sum.valorTotal??0),cmv=itens.reduce((s,i)=>s.plus(i.produto.precoCusto.mul(i.unidadesEstoque??i.quantidade)),dec(0));
+   const receita=dec(v._sum.valorTotal??0),custos=calcularCmv(itens),cmv=custos.historico.plus(custos.estimado);
    const fixas=despesas.filter(x=>x.categoriaCadastro?.tipo==='CUSTO_FIXO').reduce((s,x)=>s.plus(x.valor),dec(0));
    const variaveis=despesas.filter(x=>x.categoriaCadastro?.tipo==='CUSTO_VARIAVEL').reduce((s,x)=>s.plus(x.valor),dec(0));
    const taxa=dec(taxas._sum.valorTaxa??0),bruto=receita.minus(cmv),resultado=bruto.minus(fixas).minus(variaveis).minus(taxa);
-   const semCusto=itens.filter(i=>i.produto.precoCusto.lte(0)).length,legado=itens.filter(i=>i.unidadesEstoque===null).length;
+   const {semCusto,legados,semUnidades}=custos;
    colunas=[col('descricao','Descrição'),money('valor','Valor')];
-   linhas=[{descricao:'Receita de vendas concluídas (descontos e entrega incluídos)',valor:receita.toFixed(2)},{descricao:'(-) CMV estimado pelo custo atual',valor:cmv.toFixed(2)},{descricao:'(=) Margem bruta estimada',valor:bruto.toFixed(2)},{descricao:'(-) Custos fixos classificados',valor:fixas.toFixed(2)},{descricao:'(-) Custos variáveis classificados',valor:variaveis.toFixed(2)},{descricao:'(-) Taxas registradas nas vendas',valor:taxa.toFixed(2)},{descricao:'(=) Resultado parcial estimado',valor:resultado.toFixed(2)}];
-   resumo=[{label:'Resultado parcial estimado',valor:resultado.toFixed(2),tipo:'money'},{label:'Itens sem custo positivo',valor:semCusto},{label:'Itens legados sem unidades de estoque',valor:legado}];
-   nota='Não é DRE contábil oficial nem lucro líquido. CMV usa custo atual; despesas classificadas por vencimento, não competência. Exclui compras vinculadas a XML/recebimento para evitar duplicação de CMV. Não inclui impostos, receitas externas, despesas sem classificação, perdas ou taxas não registradas. Evite classificar taxas de venda também como despesas para não duplicá-las.';
+   linhas=[{descricao:'Receita de vendas concluídas (descontos e entrega incluídos)',valor:receita.toFixed(2)},{descricao:'(-) CMV com custo registrado na venda',valor:custos.historico.toFixed(2)},{descricao:'(-) CMV estimado de itens sem custo histórico',valor:custos.estimado.toFixed(2)},{descricao:'(=) Margem bruta estimada',valor:bruto.toFixed(2)},{descricao:'(-) Custos fixos classificados',valor:fixas.toFixed(2)},{descricao:'(-) Custos variáveis classificados',valor:variaveis.toFixed(2)},{descricao:'(-) Taxas registradas nas vendas',valor:taxa.toFixed(2)},{descricao:'(=) Resultado parcial estimado',valor:resultado.toFixed(2)}];
+   resumo=[{label:'Resultado parcial estimado',valor:resultado.toFixed(2),tipo:'money'},{label:'Itens sem custo positivo',valor:semCusto},{label:'Itens sem custo histórico',valor:legados},{label:'Itens sem unidades de estoque',valor:semUnidades}];
+   nota='Não é DRE contábil oficial nem lucro líquido. CMV das novas vendas usa custo congelado na baixa; vendas anteriores sem snapshot usam custo atual como estimativa separada. Custo zero ou ausência de unidades de estoque pode distorcer o resultado. Despesas classificadas por vencimento, não competência. Exclui compras vinculadas a XML/recebimento para evitar duplicação de CMV. Não inclui impostos, receitas externas, despesas sem classificação, perdas ou taxas não registradas. Evite classificar taxas de venda também como despesas para não duplicá-las.';
   }
   return {codigo:def.codigo,nome:def.nome,geradoEm:new Date().toISOString(),inicio:def.periodo?inicio:null,fim:def.periodo?fim:null,colunas,linhas,resumo,nota};
  }

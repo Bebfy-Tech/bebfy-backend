@@ -206,7 +206,7 @@ export class VendasService {
           ? item.quantidade * (produto.fardoQuantidade || 1)
           : item.quantidade;
 
-        await tx.itemVenda.create({
+        const itemGravado = await tx.itemVenda.create({
           data: {
             vendaId: venda.id,
             produtoId: item.produtoId,
@@ -218,12 +218,15 @@ export class VendasService {
         });
 
         const baixa = await tx.produto.updateMany({
-          where: { id: item.produtoId, empresaId, ativo: true, estoqueAtual: { gte: unidadesParaAbater }, retornavel:produto.retornavel,tipoVasilhameId:produto.tipoVasilhameId },
+          where: { id: item.produtoId, empresaId, ativo: true, estoqueAtual: { gte: unidadesParaAbater }, precoCusto:produto.precoCusto, retornavel:produto.retornavel,tipoVasilhameId:produto.tipoVasilhameId },
           data: { estoqueAtual: { decrement: unidadesParaAbater } },
         });
         if (baixa.count !== 1) {
           throw new BadRequestException('Estoque insuficiente ou produto indisponível durante a finalização da venda.');
         }
+        // Custo unitário vigente no momento da baixa; persistido na mesma transação.
+        // O produto precisa conservar o custo lido até a atualização condicional acima.
+        await tx.itemVendaCusto.create({data:{itemVendaId:itemGravado.id,custoUnitario:produto.precoCusto}});
         if(modulos.VASILHAMES_RETORNAVEIS&&createVendaDto.clienteId&&produto.retornavel){
           if(!produto.tipoVasilhameId)throw new BadRequestException('Associe '+produto.nome+' a um tipo de vasilhame antes da venda.');
           if(!await tx.tipoVasilhame.findFirst({where:{id:produto.tipoVasilhameId,empresaId}}))throw new BadRequestException('Tipo de vasilhame inválido.');

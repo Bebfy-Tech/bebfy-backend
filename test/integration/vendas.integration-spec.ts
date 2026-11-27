@@ -42,7 +42,7 @@ describe('PDV em PostgreSQL: isolamento, concorrência e caixa', () => {
     const produto = await prisma.produto.create({
       data: {
         empresaId, nome: 'Produto Concorrente', estoqueAtual: 1,
-        precoVendaVarejo: 10,
+        precoVendaVarejo: 10, precoCusto: 4.25,
       },
     });
     produtoId = produto.id;
@@ -83,6 +83,14 @@ describe('PDV em PostgreSQL: isolamento, concorrência e caixa', () => {
     expect(resultados.filter(r => r.status === 'rejected')).toHaveLength(1);
     const produto = await prisma.produto.findUnique({ where: { id: produtoId } });
     expect(produto?.estoqueAtual).toBe(0);
+  });
+
+  it('congela o custo da venda mesmo após atualização do cadastro', async () => {
+    const item = await prisma.itemVenda.findFirstOrThrow({where:{produtoId,venda:{empresaId}},include:{custoHistorico:true}});
+    expect(item.custoHistorico?.custoUnitario.toString()).toBe('4.25');
+    await prisma.produto.update({where:{id:produtoId},data:{precoCusto:7}});
+    const snapshot = await prisma.itemVendaCusto.findUniqueOrThrow({where:{itemVendaId:item.id}});
+    expect(snapshot.custoUnitario.toString()).toBe('4.25');
   });
 
   it('fecha o caixa contabilizando apenas dinheiro recebido', async () => {

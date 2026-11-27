@@ -780,6 +780,7 @@ model ItemVenda {
   precoUnitario Decimal
   precoTotal    Decimal
   unidadesEstoque Int?      // Quantidade real de unidades abatidas (fardos inclusos)
+  custoHistorico ItemVendaCusto?
   criadoEm      DateTime @default(now())
 }
 
@@ -1268,4 +1269,12 @@ model ItemInventarioEstoque {
   contadoPorId String?
   contadoEm DateTime?
   @@unique([inventarioId, produtoId])
+}
+
+// Snapshot separado: não expõe custos históricos nos includes operacionais de venda.
+model ItemVendaCusto {
+  itemVendaId String @id
+  itemVenda ItemVenda @relation(fields: [itemVendaId], references: [id], onDelete: Cascade)
+  custoUnitario Decimal
+  criadoEm DateTime @default(now())
 }
