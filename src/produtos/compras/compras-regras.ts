@@ -31,3 +31,15 @@ export function converterQuantidade(quantidade: number, fator: number) {
     throw new BadRequestException('Quantidade de compra inválida.');
   return unidades;
 }
+
+/** The difference of cumulative rounded values makes split receiving exact to the cent. */
+export function valorRecebido(total: Prisma.Decimal, unidades: number, antes: number, agora: number) {
+  if (!Number.isInteger(agora) || agora <= 0 || antes + agora > unidades)
+    throw new BadRequestException('Quantidade acima do saldo do pedido.');
+  const acumulado = (n: number) => total.mul(n).div(unidades).toDecimalPlaces(2);
+  return acumulado(antes + agora).minus(acumulado(antes));
+}
+export function custoMedio(estoque: number, custo: Prisma.Decimal, unidades: number, valor: Prisma.Decimal) {
+  if (estoque < 0 || custo.lt(0) || unidades <= 0) throw new BadRequestException('Saldo ou custo anterior inconsistente.');
+  return custo.mul(estoque).plus(valor).div(estoque + unidades).toDecimalPlaces(6);
+}

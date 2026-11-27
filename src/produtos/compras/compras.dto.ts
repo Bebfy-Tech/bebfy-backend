@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 
 export class ItemPedidoDto {
   @IsInt() @Min(1) produtoId: number;
@@ -19,4 +19,21 @@ export class CriarCompraDto {
 }
 export class EncerrarCompraDto {
   @IsString() @IsNotEmpty() @MaxLength(500) motivo: string;
+}
+
+export class ItemRecebimentoDto {
+  @IsString() @IsNotEmpty() itemCompraId: string;
+  @IsInt() @Min(1) @Max(1000000000) unidades: number;
+  @IsOptional() @IsString() @MaxLength(100) numeroLote?: string;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) validade?: string;
+}
+export class ReceberCompraDto {
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100)
+  @ValidateNested({ each: true }) @Type(() => ItemRecebimentoDto) itens: ItemRecebimentoDto[];
+  @IsOptional() @Matches(/^\d{44}$/) chaveNfe?: string;
+  @IsString() @IsNotEmpty() @MaxLength(1000) observacao: string;
+  @IsBoolean() gerarContaPagar: boolean;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) vencimento?: string;
+  @IsOptional() @IsInt() @Min(1) @Max(60) parcelas?: number;
+  @IsUUID('4') chaveOperacao: string;
 }

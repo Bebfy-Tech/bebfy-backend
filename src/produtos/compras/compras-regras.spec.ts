@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Prisma } from '@prisma/client';
-import { converterQuantidade, dataCompra, ratearTotal } from './compras-regras';
+import { converterQuantidade, dataCompra, ratearTotal, custoMedio, valorRecebido } from './compras-regras';
 const d = (v: number) => new Prisma.Decimal(v);
 describe('Regras de pedidos de compra', () => {
   it('converte embalagens sem alterar o estoque', () => {
@@ -17,5 +17,17 @@ describe('Regras de pedidos de compra', () => {
   it('rejeita datas impossíveis', () => {
     expect(() => dataCompra('2026-02-30')).toThrow();
     expect(dataCompra('2026-12-01').toISOString()).toBe('2026-12-01T00:00:00.000Z');
+  });
+});
+
+describe('Recebimento de compras', () => {
+  it('preserva centavos no recebimento parcial', () => {
+    const valores = [0, 1, 2].map(n => valorRecebido(d(10), 3, n, 1));
+    expect(valores.reduce((a,b) => a.plus(b), d(0)).toNumber()).toBe(10);
+    expect(() => valorRecebido(d(10), 3, 2, 2)).toThrow();
+  });
+  it('calcula custo médio ponderado pelo estoque', () => {
+    expect(custoMedio(10, d(4), 10, d(60)).toNumber()).toBe(5);
+    expect(() => custoMedio(-1, d(4), 10, d(60))).toThrow();
   });
 });
