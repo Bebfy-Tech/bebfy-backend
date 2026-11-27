@@ -107,6 +107,7 @@ model Empresa {
   movimentacoesEstoque MovimentacaoEstoque[]
   movimentacoesCasco   MovimentacaoCasco[]
   tiposVasilhame TipoVasilhame[]
+  movimentosFinanceiros MovimentoFinanceiro[]
   cadastrosFinanceiros CadastroFinanceiro[]
   auditoriaCadastrosFinanceiros AuditoriaCadastroFinanceiro[]
   cadastrosFinanceirosInicializados Boolean @default(false)
@@ -616,6 +617,7 @@ model HistoricoFiado {
   operadoraCadastroId String?
   operadoraCadastro CadastroFinanceiro? @relation("OperadoraFiado",fields:[operadoraCadastroId],references:[id],onDelete:Restrict)
   operadoraNome String?
+ movimentosFinanceiros MovimentoFinanceiro[]
 }
 
 // ====================================================
@@ -797,6 +799,7 @@ model PagamentoVenda {
   operadoraCadastroId String?
   operadoraCadastro CadastroFinanceiro? @relation("OperadoraVenda",fields:[operadoraCadastroId],references:[id],onDelete:Restrict)
   operadoraNome String?
+ movimentosFinanceiros MovimentoFinanceiro[]
 }
 
 // ====================================================
@@ -1029,6 +1032,8 @@ model CadastroFinanceiro {
  recebimentosFiado HistoricoFiado[] @relation("FormaFiado")
  recebimentosConta HistoricoFiado[] @relation("ContaFiado")
  recebimentosOperadora HistoricoFiado[] @relation("OperadoraFiado")
+ movimentosOrigem MovimentoFinanceiro[] @relation("MovOrigem")
+ movimentosDestino MovimentoFinanceiro[] @relation("MovDestino")
  @@unique([empresaId,tipo,nomeNormalizado])
  @@index([empresaId,tipo,ativo])
 }
@@ -1043,4 +1048,34 @@ model AuditoriaCadastroFinanceiro {
  depois Json?
  criadoEm DateTime @default(now())
  @@index([empresaId,criadoEm])
+}
+
+enum TipoMovimentoFinanceiro {
+ TRANSFERENCIA
+ CONCILIACAO
+}
+model MovimentoFinanceiro {
+ id String @id @default(uuid())
+ empresaId Int
+ empresa Empresa @relation(fields:[empresaId],references:[id],onDelete:Restrict)
+ tipo TipoMovimentoFinanceiro
+ origemId String?
+ origem CadastroFinanceiro? @relation("MovOrigem",fields:[origemId],references:[id],onDelete:Restrict)
+ destinoId String
+ destino CadastroFinanceiro @relation("MovDestino",fields:[destinoId],references:[id],onDelete:Restrict)
+ origemNome String?
+ destinoNome String
+ pagamentoVendaId String?
+ pagamentoVenda PagamentoVenda? @relation(fields:[pagamentoVendaId],references:[id],onDelete:Restrict)
+ historicoFiadoId String?
+ historicoFiado HistoricoFiado? @relation(fields:[historicoFiadoId],references:[id],onDelete:Restrict)
+ valor Decimal
+ observacao String
+ operadorId String
+ chaveOperacao String @unique
+ estornoDeId String? @unique
+ criadoEm DateTime @default(now())
+ @@index([empresaId,criadoEm])
+ @@index([pagamentoVendaId])
+ @@index([historicoFiadoId])
 }

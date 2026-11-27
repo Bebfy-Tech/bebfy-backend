@@ -399,6 +399,8 @@ export class VendasService {
       if (bloqueio.count !== 1) {
         throw new BadRequestException('Esta venda já foi cancelada ou não pode ser cancelada.');
       }
+      const conciliado=await tx.movimentoFinanceiro.aggregate({where:{empresaId,pagamentoVenda:{vendaId:id}},_sum:{valor:true}});
+      if(Number(conciliado._sum.valor??0)>0)throw new BadRequestException('Estorne as conciliações financeiras antes de cancelar a venda.');
       if(venda.clienteId)await tx.cliente.updateMany({where:{id:venda.clienteId,empresaId},data:{atualizadoEm:new Date()}});
 
       // 1. Devolve os produtos ao estoque e contabiliza cascos retornáveis

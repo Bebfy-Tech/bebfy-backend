@@ -44,7 +44,8 @@ export class CadastrosFinanceirosService{
  private async usados(tx:Tx,id:string){
   const [p,r,b,bc]=await Promise.all([tx.contaPagar.count({where:{categoriaCadastroId:id}}),tx.contaReceber.count({where:{categoriaCadastroId:id}}),tx.baixaFinanceira.count({where:{formaCadastroId:id}}),tx.baixaFinanceira.count({where:{contaFinanceiraId:id}})]);
   const [v,f]=await Promise.all([tx.pagamentoVenda.count({where:{OR:[{formaCadastroId:id},{contaFinanceiraId:id},{operadoraCadastroId:id}]}}),tx.historicoFiado.count({where:{OR:[{formaCadastroId:id},{contaFinanceiraId:id},{operadoraCadastroId:id}]}})]);
-  return p+r+b+bc+v+f>0;
+  const m=await tx.movimentoFinanceiro.count({where:{OR:[{origemId:id},{destinoId:id}]}});
+  return p+r+b+bc+v+f+m>0;
  }
  private async dependentes(tx:Tx,empresaId:number,id:string,ativos:boolean){return tx.cadastroFinanceiro.count({where:{empresaId,...(ativos?{ativo:true}:{}),OR:[{bancoId:id},{contaId:id},{operadoraId:id}]}});}
  private conflito(e:unknown):never{if(e instanceof Prisma.PrismaClientKnownRequestError&&['P2002','P2003'].includes(e.code))throw new ConflictException('Nome já cadastrado ou registro vinculado.');throw e;}
@@ -56,6 +57,7 @@ export class CadastrosFinanceirosService{
    const old=await this.obter(tx,empresaId,id);
    if(old.tipo!==dto.tipo)throw new BadRequestException('O grupo do cadastro não pode ser alterado.');
    const data=await this.dados(tx,empresaId,dto);
+   if(old.tipo==='CONTA'&&!old.saldoInicial.equals(data.saldoInicial)&&await this.usados(tx,id))throw new BadRequestException('Saldo inicial não pode ser alterado após movimentações ou vínculos de pagamento.');
    if(await this.usados(tx,id)&&(old.formaBase!==data.formaBase||old.fiado!==data.fiado))throw new BadRequestException('Tipo de pagamento já utilizado. Cadastre uma nova opção.');
    if(!data.ativo&&await this.dependentes(tx,empresaId,id,true))throw new BadRequestException('Inative os cadastros dependentes primeiro.');
    const c=await tx.cadastroFinanceiro.update({where:{id},data});await this.auditar(tx,empresaId,id,operadorId,'EDITAR',old,c);return c;
