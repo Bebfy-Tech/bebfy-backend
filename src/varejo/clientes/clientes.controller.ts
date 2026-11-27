@@ -17,12 +17,15 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
+import { IsBoolean } from 'class-validator';
 import { ClientesService } from './clientes.service';
 import { CreateClienteDto } from './dto/create-cliente.dto';
 import { UpdateClienteDto } from './dto/update-cliente.dto';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
+
+class SituacaoClienteDto { @IsBoolean() ativo:boolean; }
 
 @ApiTags('Clientes & Fiados')
 @ApiBearerAuth('JWT-auth')
@@ -62,6 +65,17 @@ export class ClientesController {
     return this.clientesService.findAll(empresaId);
   }
 
+  @Get(':id/ficha')
+  ficha(@CurrentTenant() empresaId:number,@Param('id') id:string){
+    return this.clientesService.ficha(empresaId,id);
+  }
+
+  @Patch(':id/situacao')
+  situacao(@CurrentTenant() empresaId:number,@Param('id') id:string,@Body() dto:SituacaoClienteDto,@Req() req:any){
+    this.exigirGestor(req);
+    return this.clientesService.situacao(empresaId,id,dto.ativo);
+  }
+
   @ApiOperation({
     summary: 'Buscar cliente por ID',
     description: 'Retorna os detalhes cadastrais e financeiros de um cliente.',
@@ -95,8 +109,8 @@ export class ClientesController {
   }
 
   @ApiOperation({
-    summary: 'Remover cliente',
-    description: 'Exclui o cadastro de um cliente.',
+    summary: 'Inativar cliente',
+    description: 'Inativa sem apagar histórico.',
   })
   @ApiParam({ name: 'id', description: 'ID do cliente' })
   @ApiResponse({ status: 200, description: 'Cliente removido com sucesso.' })

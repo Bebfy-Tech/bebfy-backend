@@ -167,6 +167,15 @@ export class VendasService {
         throw new BadRequestException('Caixa fechado antes da conclusão da venda.');
       }
 
+      // Recheck and lock the customer in the transaction to serialize with inactivation.
+      if (createVendaDto.clienteId) {
+        const clienteAtivo = await tx.cliente.updateMany({
+          where: { id: createVendaDto.clienteId, empresaId, ativo: true },
+          data: { ativo: true },
+        });
+        if (clienteAtivo.count !== 1) throw new BadRequestException('Cliente inativo ou indisponível.');
+      }
+
       const venda = await tx.venda.create({
         data: {
           caixaId: createVendaDto.caixaId,
