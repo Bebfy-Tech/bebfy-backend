@@ -107,6 +107,9 @@ model Empresa {
   movimentacoesEstoque MovimentacaoEstoque[]
   movimentacoesCasco   MovimentacaoCasco[]
   tiposVasilhame TipoVasilhame[]
+  cadastrosFinanceiros CadastroFinanceiro[]
+  auditoriaCadastrosFinanceiros AuditoriaCadastroFinanceiro[]
+  cadastrosFinanceirosInicializados Boolean @default(false)
   contasPagar          ContaPagar[]
   contasReceber        ContaReceber[]
   logsAuditoria        LogAuditoria[]
@@ -876,6 +879,8 @@ model ContaPagar {
   chaveLancamento String? @unique
   baixas BaixaFinanceira[]
   @@index([empresaId,status,dataVencimento])
+ categoriaCadastroId String?
+ categoriaCadastro CadastroFinanceiro? @relation("CategoriaPagar",fields:[categoriaCadastroId],references:[id],onDelete:Restrict)
 }
 
 model ContaReceber {
@@ -899,6 +904,8 @@ model ContaReceber {
   chaveLancamento String? @unique
   baixas BaixaFinanceira[]
   @@index([empresaId,status,dataVencimento])
+ categoriaCadastroId String?
+ categoriaCadastro CadastroFinanceiro? @relation("CategoriaReceber",fields:[categoriaCadastroId],references:[id],onDelete:Restrict)
 }
 // A imagem fica separada para não aumentar o tamanho das listagens e do PDV.
 model ProdutoFoto {
@@ -936,4 +943,70 @@ model BaixaFinanceira {
  criadoEm DateTime @default(now())
  @@index([contaPagarId,criadoEm])
  @@index([contaReceberId,criadoEm])
+ formaCadastroId String?
+ formaCadastro CadastroFinanceiro? @relation("FormaBaixa",fields:[formaCadastroId],references:[id],onDelete:Restrict)
+ contaFinanceiraId String?
+ contaFinanceira CadastroFinanceiro? @relation("ContaBaixa",fields:[contaFinanceiraId],references:[id],onDelete:Restrict)
+ formaNome String?
+ contaFinanceiraNome String?
+}
+
+enum TipoCadastroFinanceiro {
+ FORMA_PAGAMENTO
+ CUSTO_FIXO
+ CUSTO_VARIAVEL
+ RECEITA
+ BANCO
+ CONTA
+ OPERADORA
+}
+model CadastroFinanceiro {
+ id String @id @default(uuid())
+ empresaId Int
+ empresa Empresa @relation(fields:[empresaId],references:[id],onDelete:Cascade)
+ tipo TipoCadastroFinanceiro
+ nome String
+ nomeNormalizado String
+ ativo Boolean @default(true)
+ formaBase FormaBaixaFinanceira?
+ fiado Boolean @default(false)
+ permitePagar Boolean @default(false)
+ permiteReceber Boolean @default(false)
+ permitePdv Boolean @default(false)
+ maxParcelas Int @default(1)
+ taxas Json?
+ bancoId String?
+ banco CadastroFinanceiro? @relation("BancoConta",fields:[bancoId],references:[id],onDelete:Restrict)
+ contas CadastroFinanceiro[] @relation("BancoConta")
+ contaId String?
+ conta CadastroFinanceiro? @relation("DestinoForma",fields:[contaId],references:[id],onDelete:Restrict)
+ formas CadastroFinanceiro[] @relation("DestinoForma")
+ operadoraId String?
+ operadora CadastroFinanceiro? @relation("OperadoraForma",fields:[operadoraId],references:[id],onDelete:Restrict)
+ formasOperadora CadastroFinanceiro[] @relation("OperadoraForma")
+ agencia String?
+ numeroConta String?
+ tipoConta String?
+ chavePix String?
+ saldoInicial Decimal @default(0)
+ criadoEm DateTime @default(now())
+ atualizadoEm DateTime @updatedAt
+ contasPagar ContaPagar[] @relation("CategoriaPagar")
+ contasReceber ContaReceber[] @relation("CategoriaReceber")
+ baixas BaixaFinanceira[] @relation("FormaBaixa")
+ baixasConta BaixaFinanceira[] @relation("ContaBaixa")
+ @@unique([empresaId,tipo,nomeNormalizado])
+ @@index([empresaId,tipo,ativo])
+}
+model AuditoriaCadastroFinanceiro {
+ id String @id @default(uuid())
+ empresaId Int
+ empresa Empresa @relation(fields:[empresaId],references:[id],onDelete:Cascade)
+ cadastroId String
+ operadorId String?
+ acao String
+ antes Json?
+ depois Json?
+ criadoEm DateTime @default(now())
+ @@index([empresaId,criadoEm])
 }

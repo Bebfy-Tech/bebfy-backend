@@ -29,10 +29,12 @@ export class FinanceiroService {
   return this.prisma.$transaction(async tx=>{
    if(dto.fornecedorId&&!await tx.fornecedor.findFirst({where:{id:dto.fornecedorId,empresaId}}))throw new BadRequestException('Fornecedor não encontrado.');
    if(dto.clienteId&&!await tx.cliente.findFirst({where:{id:dto.clienteId,empresaId}}))throw new BadRequestException('Cliente não encontrado.');
+   const categoria=dto.categoriaCadastroId?await tx.cadastroFinanceiro.findFirst({where:{id:dto.categoriaCadastroId,empresaId,ativo:true,tipo:{in:tipo==='pagar'?['CUSTO_FIXO','CUSTO_VARIAVEL']:['RECEITA']}}}):null;
+   if(dto.categoriaCadastroId&&!categoria)throw new BadRequestException('Categoria financeira inválida.');
    const grupo=n>1?randomUUID():null;
    const contas=[];
    for(let i=0;i<n;i++){
-    const dados={empresaId,descricao,categoria:dto.categoria?.trim()||'OUTROS',observacao:dto.observacao?.trim(),...parcelas[i],grupoLancamento:grupo,parcela:n>1?i+1:null,totalParcelas:n>1?n:null,chaveLancamento:dto.chaveLancamento?dto.chaveLancamento+':'+(i+1):null};
+    const dados={empresaId,descricao,categoria:categoria?.nome??(dto.categoria?.trim()||'OUTROS'),categoriaCadastroId:categoria?.id,observacao:dto.observacao?.trim(),...parcelas[i],grupoLancamento:grupo,parcela:n>1?i+1:null,totalParcelas:n>1?n:null,chaveLancamento:dto.chaveLancamento?dto.chaveLancamento+':'+(i+1):null};
     contas.push(tipo==='pagar'?await tx.contaPagar.create({data:{...dados,fornecedorId:dto.fornecedorId}}):await tx.contaReceber.create({data:{...dados,clienteId:dto.clienteId}}));
    }
    return n===1?contas[0]:{contas};
@@ -47,12 +49,16 @@ export class FinanceiroService {
   const principal=dec(dto.principal),juros=dec(dto.juros??0),multa=dec(dto.multa??0),desconto=dec(dto.desconto??0);
   if(dto.chaveOperacao){
    const b=await tx.baixaFinanceira.findFirst({where:{...link,chaveOperacao:dto.chaveOperacao}});
-   if(b){if(!b.principal.equals(principal)||!b.juros.equals(juros)||!b.multa.equals(multa)||!b.desconto.equals(desconto)||b.forma!==dto.forma||b.observacao!==(dto.observacao?.trim()||null))throw new ConflictException('Chave de baixa já utilizada com outros dados.');return c;}
+   if(b){if(!b.principal.equals(principal)||!b.juros.equals(juros)||!b.multa.equals(multa)||!b.desconto.equals(desconto)||b.forma!==dto.forma||b.formaCadastroId!==(dto.formaCadastroId??null)||b.contaFinanceiraId!==(dto.contaFinanceiraId??null)||b.observacao!==(dto.observacao?.trim()||null))throw new ConflictException('Chave de baixa já utilizada com outros dados.');return c;}
   }
+  const forma=dto.formaCadastroId?await tx.cadastroFinanceiro.findFirst({where:{id:dto.formaCadastroId,empresaId,ativo:true,tipo:'FORMA_PAGAMENTO',fiado:false,formaBase:dto.forma,...(tipo==='pagar'?{permitePagar:true}:{permiteReceber:true})}}):null;
+  if(dto.formaCadastroId&&!forma)throw new BadRequestException('Forma de pagamento indisponível.');
+  const contaFinanceira=dto.contaFinanceiraId?await tx.cadastroFinanceiro.findFirst({where:{id:dto.contaFinanceiraId,empresaId,ativo:true,tipo:'CONTA'}}):null;
+  if(dto.contaFinanceiraId&&!contaFinanceira)throw new BadRequestException('Conta financeira indisponível.');
   const novo=c.valorBaixado.plus(principal);
   if(c.status!=='PENDENTE'||principal.lte(0)||novo.gt(c.valor)||juros.lt(0)||multa.lt(0)||desconto.lt(0)||desconto.gt(principal.plus(juros).plus(multa)))throw new BadRequestException('Valor da baixa ou saldo inválido.');
   await this.atualizar(tx,empresaId,tipo,c,novo,novo.equals(c.valor)?'PAGO':'PENDENTE');
-  await tx.baixaFinanceira.create({data:{...link,principal,juros,multa,desconto,forma:dto.forma,operadorId,observacao:dto.observacao?.trim()||null,chaveOperacao:dto.chaveOperacao}});
+  await tx.baixaFinanceira.create({data:{...link,principal,juros,multa,desconto,forma:dto.forma,formaCadastroId:forma?.id,formaNome:forma?.nome,contaFinanceiraId:contaFinanceira?.id,contaFinanceiraNome:contaFinanceira?.nome,operadorId,observacao:dto.observacao?.trim()||null,chaveOperacao:dto.chaveOperacao}});
   return this.conta(tx,empresaId,tipo,id);
  }
  async baixar(empresaId:number,tipo:TipoConta,id:string,dto:BaixarContaDto,operadorId:string){return this.prisma.$transaction(tx=>this.registrarBaixa(tx,empresaId,tipo,id,dto,operadorId));}
@@ -72,7 +78,7 @@ export class FinanceiroService {
    if(!b||c.status==='CANCELADO'||await tx.baixaFinanceira.findUnique({where:{estornoDeId:baixaId}}))throw new BadRequestException('Baixa inexistente ou já estornada.');
    const novo=c.valorBaixado.minus(b.principal);if(novo.lt(0))throw new BadRequestException('Saldo inconsistente.');
    await this.atualizar(tx,empresaId,tipo,c,novo,'PENDENTE');
-   await tx.baixaFinanceira.create({data:{...link,principal:b.principal.neg(),juros:b.juros.neg(),multa:b.multa.neg(),desconto:b.desconto.neg(),forma:b.forma,operadorId,observacao:motivo.trim(),estornoDeId:b.id}});
+   await tx.baixaFinanceira.create({data:{...link,principal:b.principal.neg(),juros:b.juros.neg(),multa:b.multa.neg(),desconto:b.desconto.neg(),forma:b.forma,formaCadastroId:b.formaCadastroId,formaNome:b.formaNome,contaFinanceiraId:b.contaFinanceiraId,contaFinanceiraNome:b.contaFinanceiraNome,operadorId,observacao:motivo.trim(),estornoDeId:b.id}});
    return this.conta(tx,empresaId,tipo,id);
   });
  }
