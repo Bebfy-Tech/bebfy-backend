@@ -4,7 +4,7 @@ import { StatusConta } from '@prisma/client';
 import { JwtAuthGuard } from '../core/auth/jwt-auth.guard';
 import { TenantGuard } from '../common/guards/tenant.guard';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
-import { CriarContaDto } from './dto/criar-conta.dto';
+import { CriarContaDto, BaixarContaDto, EstornarContaDto } from './dto/criar-conta.dto';
 import { FinanceiroService } from './financeiro.service';
 
 @ApiTags('Financeiro')
@@ -20,6 +20,16 @@ export class FinanceiroController {
     }
   }
 
+  @Get('referencias')
+  referencias(@CurrentTenant() empresaId:number,@Req() req:any){this.exigirGestor(req);return this.service.referencias(empresaId);}
+  @Post('contas-pagar/:id/baixas')
+  baixarPagar(@CurrentTenant() empresaId:number,@Req() req:any,@Param('id') id:string,@Body() dto:BaixarContaDto){this.exigirGestor(req);return this.service.baixar(empresaId,'pagar',id,dto,req.user.funcionarioId);}
+  @Post('contas-receber/:id/baixas')
+  baixarReceber(@CurrentTenant() empresaId:number,@Req() req:any,@Param('id') id:string,@Body() dto:BaixarContaDto){this.exigirGestor(req);return this.service.baixar(empresaId,'receber',id,dto,req.user.funcionarioId);}
+  @Post('contas-pagar/:id/baixas/:baixaId/estorno')
+  estornarPagar(@CurrentTenant() empresaId:number,@Req() req:any,@Param('id') id:string,@Param('baixaId') baixaId:string,@Body() dto:EstornarContaDto){this.exigirGestor(req);return this.service.estornar(empresaId,'pagar',id,baixaId,dto.motivo,req.user.funcionarioId);}
+  @Post('contas-receber/:id/baixas/:baixaId/estorno')
+  estornarReceber(@CurrentTenant() empresaId:number,@Req() req:any,@Param('id') id:string,@Param('baixaId') baixaId:string,@Body() dto:EstornarContaDto){this.exigirGestor(req);return this.service.estornar(empresaId,'receber',id,baixaId,dto.motivo,req.user.funcionarioId);}
   @Get('resumo')
   resumo(@CurrentTenant() empresaId: number, @Req() req: any) {
     this.exigirGestor(req);
@@ -41,13 +51,13 @@ export class FinanceiroController {
   @Patch('contas-pagar/:id/pagar')
   pagar(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string) {
     this.exigirGestor(req);
-    return this.service.alterarStatus(empresaId, 'pagar', id, 'PAGO');
+    return this.service.alterarStatus(empresaId, 'pagar', id, 'PAGO', req.user.funcionarioId);
   }
 
   @Patch('contas-pagar/:id/cancelar')
   cancelarPagar(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string) {
     this.exigirGestor(req);
-    return this.service.alterarStatus(empresaId, 'pagar', id, 'CANCELADO');
+    return this.service.alterarStatus(empresaId, 'pagar', id, 'CANCELADO', req.user.funcionarioId);
   }
 
   @Post('contas-receber')
@@ -65,12 +75,12 @@ export class FinanceiroController {
   @Patch('contas-receber/:id/receber')
   receber(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string) {
     this.exigirGestor(req);
-    return this.service.alterarStatus(empresaId, 'receber', id, 'PAGO');
+    return this.service.alterarStatus(empresaId, 'receber', id, 'PAGO', req.user.funcionarioId);
   }
 
   @Patch('contas-receber/:id/cancelar')
   cancelarReceber(@CurrentTenant() empresaId: number, @Req() req: any, @Param('id') id: string) {
     this.exigirGestor(req);
-    return this.service.alterarStatus(empresaId, 'receber', id, 'CANCELADO');
+    return this.service.alterarStatus(empresaId, 'receber', id, 'CANCELADO', req.user.funcionarioId);
   }
 }

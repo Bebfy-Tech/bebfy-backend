@@ -500,6 +500,7 @@ model Fornecedor {
   criadoEm     DateTime     @default(now())
 
   notasFiscais NotaFiscal[]
+  contasPagar ContaPagar[]
 
   @@unique([empresaId, cnpj])
 }
@@ -564,6 +565,7 @@ model Cliente {
 
   vendas             Venda[]
   fiados             HistoricoFiado[]
+  contasReceber ContaReceber[]
   movimentacoesCasco MovimentacaoCasco[]
 
   @@unique([empresaId, cpfCnpj])
@@ -864,6 +866,16 @@ model ContaPagar {
   notaFiscalId   String?
   notaFiscal     NotaFiscal? @relation(fields: [notaFiscalId], references: [id])
   criadoEm       DateTime    @default(now())
+  fornecedorId String?
+  fornecedor Fornecedor? @relation(fields:[fornecedorId],references:[id],onDelete:Restrict)
+  valorBaixado Decimal @default(0)
+  observacao String?
+  grupoLancamento String?
+  parcela Int?
+  totalParcelas Int?
+  chaveLancamento String? @unique
+  baixas BaixaFinanceira[]
+  @@index([empresaId,status,dataVencimento])
 }
 
 model ContaReceber {
@@ -876,6 +888,17 @@ model ContaReceber {
   dataRecebimento DateTime?
   status          StatusConta @default(PENDENTE)
   criadoEm        DateTime    @default(now())
+  clienteId String?
+  cliente Cliente? @relation(fields:[clienteId],references:[id],onDelete:Restrict)
+  categoria String @default("OUTROS")
+  valorBaixado Decimal @default(0)
+  observacao String?
+  grupoLancamento String?
+  parcela Int?
+  totalParcelas Int?
+  chaveLancamento String? @unique
+  baixas BaixaFinanceira[]
+  @@index([empresaId,status,dataVencimento])
 }
 // A imagem fica separada para não aumentar o tamanho das listagens e do PDV.
 model ProdutoFoto {
@@ -883,4 +906,34 @@ model ProdutoFoto {
   produto   Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
   jpeg      Bytes
   atualizadoEm DateTime @updatedAt
+}
+
+enum FormaBaixaFinanceira {
+ DINHEIRO
+ PIX
+ CARTAO_DEBITO
+ CARTAO_CREDITO
+ BOLETO
+ TRANSFERENCIA
+ OUTROS
+ NAO_INFORMADO
+}
+model BaixaFinanceira {
+ id String @id @default(uuid())
+ contaPagarId String?
+ contaPagar ContaPagar? @relation(fields:[contaPagarId],references:[id],onDelete:Restrict)
+ contaReceberId String?
+ contaReceber ContaReceber? @relation(fields:[contaReceberId],references:[id],onDelete:Restrict)
+ principal Decimal
+ juros Decimal @default(0)
+ multa Decimal @default(0)
+ desconto Decimal @default(0)
+ forma FormaBaixaFinanceira
+ operadorId String?
+ observacao String?
+ estornoDeId String? @unique
+ chaveOperacao String? @unique
+ criadoEm DateTime @default(now())
+ @@index([contaPagarId,criadoEm])
+ @@index([contaReceberId,criadoEm])
 }

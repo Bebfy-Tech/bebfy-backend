@@ -97,7 +97,7 @@ export class ImportacaoXmlService {
           }});
         }
         if(dto.gerarContaPagar) await tx.contaPagar.create({data:{
-          empresaId,notaFiscalId:nota.id,descricao:'NF-e '+nf.numero+' — '+fornecedor.razaoSocial,
+          empresaId,notaFiscalId:nota.id,fornecedorId:fornecedor.id,descricao:'NF-e '+nf.numero+' — '+fornecedor.razaoSocial,
           categoria:'COMPRA DE MERCADORIAS',valor:nf.valor,dataVencimento:new Date(dto.vencimento!)
         }});
         return {notaFiscalId:nota.id,numeroNota:nf.numero,itensImportados:nf.itens.length,contaPagarCriada:!!dto.gerarContaPagar};
