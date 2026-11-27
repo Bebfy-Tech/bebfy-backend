@@ -81,6 +81,7 @@ export class LotesService {
 
   async remove(empresaId: number, id: number) {
     const lote = await this.findOne(empresaId, id);
+    if(lote.itemRecebimentoId)throw new BadRequestException('Lote vinculado a compra. Não pode ser removido isoladamente.');
 
     return this.prisma.$transaction(async (tx) => {
       const baixa = await tx.produto.updateMany({

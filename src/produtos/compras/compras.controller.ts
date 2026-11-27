@@ -4,7 +4,7 @@ import { TenantGuard } from '../../common/guards/tenant.guard';
 import { ExigirModulo, ModuloAtivoGuard } from '../../common/guards/modulo-ativo.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { ComprasService } from './compras.service';
-import { CriarCompraDto, EncerrarCompraDto } from './compras.dto';
+import { CriarCompraDto, EncerrarCompraDto, ReceberCompraDto } from './compras.dto';
 
 @Controller('compras')
 @UseGuards(JwtAuthGuard, TenantGuard, ModuloAtivoGuard)
@@ -33,5 +33,9 @@ export class ComprasController {
   }
   @Post(':id/encerrar') encerrar(@CurrentTenant() empresaId: number, @Param('id') id: string, @Body() dto: EncerrarCompraDto, @Req() req: any) {
     return this.service.encerrar(empresaId, id, dto.motivo, this.gestor(req));
+  }
+
+  @Post(':id/receber') receber(@CurrentTenant() empresaId:number,@Param('id') id:string,@Body() dto:ReceberCompraDto,@Req() req:any){
+    return this.service.receber(empresaId,id,dto,this.gestor(req));
   }
 }

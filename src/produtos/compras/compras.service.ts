@@ -1,11 +1,14 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../core/prisma/prisma.service';
-import { CriarCompraDto } from './compras.dto';
-import { converterQuantidade, dataCompra, ratearTotal } from './compras-regras';
+import { createHash } from 'crypto';
+import { resolverModulos } from '../../common/modulos/plano-modulos';
+import { parcelasMensais } from '../../financeiro/financeiro-regras';
+import { CriarCompraDto, ReceberCompraDto } from './compras.dto';
+import { converterQuantidade, dataCompra, ratearTotal, custoMedio, valorRecebido } from './compras-regras';
 
 type Tx = Prisma.TransactionClient;
-const incluir = { itens: { orderBy: { produtoId: 'asc' as const } } };
+const incluir = { itens: { orderBy: { produtoId: 'asc' as const } }, recebimentos: { orderBy: { criadoEm: 'desc' as const }, include: { itens: { include: { lote: true } }, contasPagar: { select: { id: true, descricao: true, valor: true, status: true, dataVencimento: true } } } } } satisfies Prisma.CompraInclude;
 const d = (v: Prisma.Decimal.Value) => new Prisma.Decimal(v);
 
 @Injectable()
@@ -124,6 +127,60 @@ export class ComprasService {
       const r = await tx.compra.updateMany({ where: { empresaId, id, status: c.status }, data: { status, encerradoEm: new Date(), encerradoPor: operadorId, motivoEncerramento: texto } });
       if (!r.count) throw new ConflictException('Pedido alterado.');
       return this.obter(tx, empresaId, id);
+    });
+  }
+
+  async receber(empresaId: number, id: string, dto: ReceberCompraDto, operadorId: string) {
+    if (!dto.observacao.trim()) throw new BadRequestException('Informe a conferência e o motivo caso não gere conta a pagar.');
+    const itens = [...dto.itens].sort((a,b) => a.itemCompraId.localeCompare(b.itemCompraId));
+    if (!itens.length || new Set(itens.map(i => i.itemCompraId)).size !== itens.length)
+      throw new BadRequestException('Itens do recebimento inválidos ou repetidos.');
+    const assinatura = createHash('sha256').update(JSON.stringify({
+      id, itens: itens.map(i=>[i.itemCompraId,i.unidades,i.numeroLote?.trim()||null,i.validade||null]),
+      chaveNfe: dto.chaveNfe??null, observacao: dto.observacao.trim(), gerarContaPagar: dto.gerarContaPagar,
+      vencimento: dto.vencimento??null, parcelas: dto.parcelas??1
+    })).digest('hex');
+    return this.serial(async tx => {
+      const anterior = await tx.recebimentoCompra.findFirst({ where: { empresaId, chaveOperacao: dto.chaveOperacao } });
+      if (anterior) {
+        if (anterior.compraId !== id || anterior.assinatura !== assinatura) throw new ConflictException('Chave utilizada com outros dados.');
+        return this.obter(tx, empresaId, id);
+      }
+      // Updating the tenant row coordinates manual receiving with XML imports, even under serializable isolation.
+      await tx.empresa.update({where:{id:empresaId},data:{atualizadoEm:new Date()}});
+      const c = await this.obter(tx, empresaId, id);
+      if (!['AGUARDANDO','PARCIAL'].includes(c.status)) throw new BadRequestException('Confirme o pedido antes de receber.');
+      await this.fornecedorAtivo(tx, empresaId, c.fornecedorId);
+      if (dto.chaveNfe && (await tx.notaFiscal.findUnique({where:{empresaId_chaveAcesso:{empresaId,chaveAcesso:dto.chaveNfe}}}) || await tx.recebimentoCompra.findFirst({where:{empresaId,chaveNfe:dto.chaveNfe}})))
+        throw new ConflictException('Esta NF-e já possui entrada registrada.');
+      const empresa = await tx.empresa.findUniqueOrThrow({where:{id:empresaId},select:{plano:{select:{modulosPadrao:true}},modulosAtivos:{select:{modulo:true,ativo:true}}}});
+      const lotes = resolverModulos(empresa).ESTOQUE_LOTES;
+      const rows = itens.map(i => {
+        const item = c.itens.find(x => x.id === i.itemCompraId);
+        if (!item) throw new BadRequestException('Item não pertence ao pedido.');
+        if ((i.numeroLote || i.validade) && !lotes) throw new BadRequestException('Módulo de lotes desativado.');
+        return {i,item,valor:valorRecebido(item.total,item.unidades,item.unidadesRecebidas,i.unidades)};
+      }).sort((a,b)=>a.item.produtoId-b.item.produtoId);
+      const total = rows.reduce((v,r)=>v.plus(r.valor),d(0));
+      const parcelas = dto.gerarContaPagar && total.gt(0) ? parcelasMensais(Number(total),dto.vencimento??'','PARCELADA',dto.parcelas??1) : [];
+      const rec = await tx.recebimentoCompra.create({data:{empresaId,compraId:id,total,chaveNfe:dto.chaveNfe,observacao:dto.observacao.trim(),operadorId,chaveOperacao:dto.chaveOperacao,assinatura}});
+      for (const {i,item,valor} of rows) {
+        const p = await tx.produto.findFirst({where:{empresaId,id:item.produtoId,ativo:true}});
+        if (!p || p.unidadeMedida !== item.unidadeBase || p.estoqueAtual+i.unidades>2147483647) throw new BadRequestException('Produto indisponível ou unidade de estoque alterada.');
+        const novo = custoMedio(p.estoqueAtual,p.precoCusto,i.unidades,valor);
+        const update = await tx.produto.updateMany({where:{empresaId,id:p.id,ativo:true,estoqueAtual:p.estoqueAtual,precoCusto:p.precoCusto,unidadeMedida:item.unidadeBase},data:{estoqueAtual:{increment:i.unidades},precoCusto:novo}});
+        if (!update.count) throw new ConflictException('Estoque ou custo alterado. Confira novamente.');
+        const ir=await tx.itemRecebimentoCompra.create({data:{recebimentoId:rec.id,itemCompraId:item.id,unidades:i.unidades,valor,estoqueAnterior:p.estoqueAtual,estoquePosterior:p.estoqueAtual+i.unidades,custoAnterior:p.precoCusto,custoNovo:novo,custoUnitario:valor.div(i.unidades).toDecimalPlaces(6)}});
+        if (i.numeroLote?.trim()||i.validade) await tx.loteProduto.create({data:{empresaId,produtoId:p.id,itemRecebimentoId:ir.id,quantidade:i.unidades,numeroLote:i.numeroLote?.trim()||null,dataVencimento:i.validade?dataCompra(i.validade):null}});
+        await tx.movimentacaoEstoque.create({data:{empresaId,produtoId:p.id,tipo:'ENTRADA_COMPRA',quantidade:i.unidades,motivo:'Compra #'+c.codigoCompra+' / recebimento '+rec.id,observacao:dto.observacao.trim()}});
+        await tx.historicoCusto.create({data:{produtoId:p.id,custoAnterior:p.precoCusto,custoNovo:novo}});
+        await tx.itemCompra.update({where:{id:item.id},data:{unidadesRecebidas:{increment:i.unidades}}});
+      }
+      for (let n=0;n<parcelas.length;n++) await tx.contaPagar.create({data:{empresaId,fornecedorId:c.fornecedorId,recebimentoCompraId:rec.id,descricao:'Compra #'+c.codigoCompra+' / '+c.fornecedorNome,categoria:'COMPRA DE MERCADORIAS',...parcelas[n],grupoLancamento:parcelas.length>1?rec.id:null,parcela:parcelas.length>1?n+1:null,totalParcelas:parcelas.length>1?parcelas.length:null}});
+      const completo=c.itens.every(x=>x.unidadesRecebidas+(itens.find(i=>i.itemCompraId===x.id)?.unidades??0)===x.unidades);
+      const r=await tx.compra.updateMany({where:{id,empresaId,status:c.status},data:{status:completo?'RECEBIDA':'PARCIAL'}});
+      if(!r.count)throw new ConflictException('Pedido alterado.');
+      return this.obter(tx,empresaId,id);
     });
   }
 }

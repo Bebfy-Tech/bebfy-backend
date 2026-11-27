@@ -81,6 +81,8 @@ export class ImportacaoXmlService {
     }
     try {
       return await this.prisma.$transaction(async tx=>{
+        await tx.empresa.update({where:{id:empresaId},data:{atualizadoEm:new Date()}});
+        if(await tx.recebimentoCompra.findFirst({where:{empresaId,chaveNfe:nf.chave}}))throw new ConflictException('NF-e já registrada em recebimento manual.');
         let fornecedor=await buscarFornecedorDocumento(tx,empresaId,nf.fornecedor.cnpj);
         if(fornecedor){const lock=await tx.fornecedor.updateMany({where:{id:fornecedor.id,empresaId,ativo:true,cnpj:fornecedor.cnpj},data:{ativo:true}});if(!lock.count)throw new BadRequestException('Fornecedor alterado ou inativo. Atualize a prévia.');}
         if(!fornecedor) fornecedor=await tx.fornecedor.create({data:{
