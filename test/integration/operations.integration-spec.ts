@@ -96,12 +96,27 @@ describe('API operacional: contratos integrados e segurança por empresa', () =>
 
     const supplier = await request(server).post('/fornecedores').set(headers()).send({
       razaoSocial: 'Distribuição QA Ltda', nomeFantasia: 'Fornecedor Testes',
-      cnpj: '11122233300019',
+      cnpj: '11.222.333/0001-81',
     });
     expect(supplier.status).toBe(201);
+    expect(supplier.body.cnpj).toBe('11222333000181');
+    const invalid=await request(server).post('/fornecedores').set(headers()).send({razaoSocial:'Inválido QA',cnpj:'11122233300019'});
+    expect(invalid.status).toBe(400);
+    const duplicated=await request(server).post('/fornecedores').set(headers()).send({razaoSocial:'Duplicado QA',cnpj:'11222333000181'});
+    expect(duplicated.status).toBe(409);
+    const ficha=await request(server).get('/fornecedores/'+supplier.body.id+'/ficha').set(headers());
+    expect(ficha.status).toBe(200);
+    expect(ficha.body.fornecedor.id).toBe(supplier.body.id);
     const suppliers = await request(server).get('/fornecedores').set(headers());
     expect(suppliers.status).toBe(200);
     expect(suppliers.body.some((r: { id: string }) => r.id === supplier.body.id)).toBe(true);
+    expect((await request(server).delete('/fornecedores/'+supplier.body.id).set(headers())).status).toBe(200);
+    const inactive=await request(server).get('/fornecedores/'+supplier.body.id).set(headers());
+    expect(inactive.body.ativo).toBe(false);
+    const management=await request(server).get('/fornecedores/gestao').set(headers());
+    expect(management.status).toBe(200);
+    expect(management.body.some((r:{id:string;ativo:boolean})=>r.id===supplier.body.id&&!r.ativo)).toBe(true);
+    expect((await request(server).patch('/fornecedores/'+supplier.body.id+'/situacao').set(headers()).send({ativo:true})).status).toBe(200);
   });
 
   it('consulta sem caixa aberto e rejeita saldo inicial negativo', async () => {
