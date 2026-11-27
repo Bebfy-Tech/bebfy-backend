@@ -47,7 +47,7 @@ export class ImportacaoXmlService {
       if (!Number.isSafeInteger(quantidade) || quantidade<=0) {
         throw new BadRequestException('O item '+(index+1)+' usa quantidade fracionária ou inválida. Ajuste a unidade antes de importar.');
       }
-      return {indice:index,codigo:str(p.cProd),ean:/^\d{8,14}$/.test(str(p.cEAN))?str(p.cEAN):null,nome:str(p.xProd),quantidade,valorUnitario:positiveMoney(p.vUnCom)};
+      return {indice:index,codigo:str(p.cProd),ean:/^\d{8,14}$/.test(str(p.cEAN))?str(p.cEAN):null,nome:str(p.xProd),ncm:/^\d{8}$/.test(str(p.NCM))?str(p.NCM):null,cest:/^\d{7}$/.test(str(p.CEST))?str(p.CEST):null,quantidade,valorUnitario:positiveMoney(p.vUnCom)};
     });
     if (!itens.length || itens.length>300) throw new BadRequestException('A NF-e deve ter entre 1 e 300 itens.');
     return {chave,numero,data,valor,fornecedor:{cnpj:emitCnpj,razaoSocial:str(inf.emit.xNome)},destinatarioCnpj:cnpj(inf.dest?.CNPJ),itens};

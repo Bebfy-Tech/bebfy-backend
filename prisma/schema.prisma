@@ -419,6 +419,13 @@ model Produto {
   empresa           Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   nome              String
   codigoBarras      String?
+  marca              String? @db.VarChar(120)
+  fabricante         String? @db.VarChar(160)
+  descricaoComplementar String? @db.VarChar(2000)
+  grupo              String? @db.VarChar(120)
+  subgrupo           String? @db.VarChar(120)
+  ncm                String? @db.VarChar(8)
+  cest               String? @db.VarChar(7)
   ml                Int?
   unidadeMedida     String                @default("UN")
   fardoQuantidade   Int?                  @default(1)

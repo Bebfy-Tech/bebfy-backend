@@ -119,7 +119,13 @@ export class ProdutosService {
 
     return this.prisma.produto.findMany({
       where: {
-        nome: { contains: termo, mode: 'insensitive' },
+        OR: [
+          { nome: { contains: termo, mode: 'insensitive' } },
+          { marca: { contains: termo, mode: 'insensitive' } },
+          { fabricante: { contains: termo, mode: 'insensitive' } },
+          { grupo: { contains: termo, mode: 'insensitive' } },
+          { subgrupo: { contains: termo, mode: 'insensitive' } },
+        ],
         empresaId,
         ativo: true,
       },

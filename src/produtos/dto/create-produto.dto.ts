@@ -6,6 +6,8 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
+  MaxLength,
 } from 'class-validator';
 
 export class CreateProdutoDto {
@@ -13,6 +15,41 @@ export class CreateProdutoDto {
   @IsString({ message: 'O nome deve ser um texto.' })
   @IsNotEmpty({ message: 'O nome do produto é obrigatório.' })
   nome: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  marca?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  fabricante?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  descricaoComplementar?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  grupo?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  subgrupo?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{8}$/, { message: 'NCM deve conter exatamente 8 dígitos.' })
+  ncm?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{7}$/, { message: 'CEST deve conter exatamente 7 dígitos.' })
+  cest?: string | null;
 
   // Código de barras EAN/GTIN para leitura no caixa/PDV - Opcional
   @IsString({ message: 'O código de barras deve ser um texto.' })
