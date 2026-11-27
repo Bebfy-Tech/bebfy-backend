@@ -1,8 +1,9 @@
+import { consultaEmpresas } from './empresas-consulta';
 import { inicializarUnidades } from '../produtos/unidades-medida';
 import { inicializarCadastros } from '../financeiro/cadastros-padroes';
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../core/prisma/prisma.service';
-import { StatusEmpresa, NomeModulo } from '@prisma/client';
+import { StatusEmpresa, NomeModulo, Prisma } from '@prisma/client';
 import { MODULOS_PADRAO, MODULOS_IMPLEMENTADOS } from '../common/modulos/plano-modulos';
 import { CriarEmpresaDto } from './dto/criar-empresa.dto';
 import { CriarCobrancaSaasDto } from './dto/cobranca-saas.dto';
@@ -316,6 +317,21 @@ export class SaasService {
       await tx.saasChamado.update({ where: { id }, data: { atualizadoEm: new Date() } });
       return evento;
     });
+  }
+
+  // Endpoint de listagem paginada: mantém contrato antigo para dashboard e demais consumidores.
+  async listarEmpresasPaginadas(query:unknown){
+    const {where,orderBy,pagina,limite}=consultaEmpresas(query);
+    return this.prisma.$transaction(async tx=>{
+      const total=await tx.empresa.count({where});
+      const atual=Math.min(pagina,Math.max(1,Math.ceil(total/limite)));
+      const itens=await tx.empresa.findMany({where,orderBy,skip:(atual-1)*limite,take:limite,select:{
+        id:true,nomeFantasia:true,razaoSocial:true,cnpj:true,slug:true,subdominio:true,status:true,inadimplente:true,liberacaoFinanceiraAte:true,planoId:true,plano:true,modulosAtivos:true,criadoEm:true,
+        funcionarios:{where:{cargo:'PROPRIETARIO'},orderBy:[{ativo:'desc'},{criadoEm:'asc'},{id:'asc'}],take:1,select:{id:true,nome:true,usuario:{select:{email:true,ativo:true}}}},
+        _count:{select:{funcionarios:true,produtos:true,vendas:true,clientes:true}}
+      }});
+      return {itens,total,pagina:atual,limite};
+    },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
   }
 
   async listarEmpresas() {

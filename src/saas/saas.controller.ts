@@ -199,6 +199,10 @@ export class SaasController {
   }
 
   @UseGuards(SaasPermissionGuard('EMPRESAS'))
+  @Get('empresas/paginadas')
+  listarEmpresasPaginadas(@Query() query:Record<string,unknown>){return this.saasService.listarEmpresasPaginadas(query);}
+
+  @UseGuards(SaasPermissionGuard('EMPRESAS'))
   @Get('empresas/verificar-endereco')
   verificarEnderecoEmpresa(@Query('subdominio') subdominio: string) {
     return this.saasService.verificarEnderecoEmpresa(subdominio || '');
