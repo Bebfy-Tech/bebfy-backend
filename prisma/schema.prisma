@@ -100,6 +100,7 @@ model Empresa {
   produtos             Produto[]
   lotes                LoteProduto[]
   fornecedores         Fornecedor[]
+  compras Compra[]
   notasFiscais         NotaFiscal[]
   clientes             Cliente[]
   caixas               Caixa[]
@@ -460,6 +461,7 @@ model Produto {
   foto              ProdutoFoto?
   lotes             LoteProduto[]
   historicoCustos   HistoricoCusto[]
+  itensCompra ItemCompra[]
   itensVenda        ItemVenda[]
   itensNotaFiscal   ItemNotaFiscal[]
   movimentacoes     MovimentacaoEstoque[]
@@ -522,6 +524,7 @@ model Fornecedor {
 
   notasFiscais NotaFiscal[]
   contasPagar ContaPagar[]
+  compras Compra[]
 
   @@unique([empresaId, cnpj])
   @@index([empresaId,ativo])
@@ -1119,4 +1122,60 @@ model UnidadeMedida {
  produtosEmbalagem Produto[] @relation("EmbalagemProduto")
  @@unique([empresaId,sigla])
  @@index([empresaId,ativo])
+}
+
+enum StatusCompra {
+  RASCUNHO
+  AGUARDANDO
+  PARCIAL
+  RECEBIDA
+  CANCELADA
+  ENCERRADA_PARCIAL
+}
+
+model Compra {
+  id String @id @default(uuid())
+  empresaId Int
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  codigoCompra Int @unique @default(autoincrement())
+  fornecedorId String
+  fornecedor Fornecedor @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+  fornecedorNome String
+  status StatusCompra @default(RASCUNHO)
+  previsaoEntrega DateTime?
+  observacao String?
+  subtotal Decimal
+  frete Decimal
+  desconto Decimal
+  total Decimal
+  operadorId String
+  chaveOperacao String @unique
+  criadoEm DateTime @default(now())
+  confirmadoEm DateTime?
+  confirmadoPor String?
+  encerradoEm DateTime?
+  encerradoPor String?
+  motivoEncerramento String?
+  itens ItemCompra[]
+  @@index([empresaId,status,criadoEm])
+  @@index([fornecedorId])
+}
+
+model ItemCompra {
+  id String @id @default(uuid())
+  compraId String
+  compra Compra @relation(fields: [compraId], references: [id], onDelete: Restrict)
+  produtoId Int
+  produto Produto @relation(fields: [produtoId], references: [id], onDelete: Restrict)
+  produtoNome String
+  unidadeBase String
+  unidadeCompra String
+  fator Int
+  quantidade Int
+  unidades Int
+  unidadesRecebidas Int @default(0)
+  custoEmbalagem Decimal
+  subtotal Decimal
+  total Decimal
+  @@unique([compraId,produtoId])
 }
