@@ -1,3 +1,4 @@
+import { exigirCredito } from '../clientes/credito';
 import {
   Injectable,
   NotFoundException,
@@ -128,16 +129,7 @@ export class VendasService {
         throw new NotFoundException('Cliente informado para a venda não foi encontrado nesta empresa.');
       }
 
-      const saldoProjetado = Number(cliente.saldoDevedor) + valorFiado;
-      const limiteCredito = Number(cliente.limiteCredito);
-
-      if (limiteCredito > 0 && saldoProjetado > limiteCredito) {
-        throw new BadRequestException(
-          `Venda bloqueada: O valor no fiado ultrapassará o limite de crédito do cliente (Limite: R$ ${limiteCredito.toFixed(
-            2,
-          )}, Saldo Atual: R$ ${Number(cliente.saldoDevedor).toFixed(2)}).`,
-        );
-      }
+      exigirCredito(cliente, valorFiado);
     }
 
     if (valorTotal <= 0) {
@@ -250,10 +242,7 @@ export class VendasService {
         });
         if (!clienteAtual) throw new NotFoundException('Cliente indisponível.');
         const novoSaldo = Number(clienteAtual.saldoDevedor) + valorFiado;
-        const limite = Number(clienteAtual.limiteCredito);
-        if (limite > 0 && novoSaldo > limite) {
-          throw new BadRequestException('Limite do fiado excedido durante a conclusão da venda.');
-        }
+        exigirCredito(clienteAtual, valorFiado);
         const atualizacao = await tx.cliente.updateMany({
           where: {
             id: createVendaDto.clienteId,

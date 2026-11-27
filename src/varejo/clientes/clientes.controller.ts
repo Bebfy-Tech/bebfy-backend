@@ -51,7 +51,7 @@ export class ClientesController {
     @Body() createClienteDto: CreateClienteDto,
     @Req() req: any,
   ) {
-    if (createClienteDto.limiteCredito !== undefined) this.exigirGestor(req);
+    if (createClienteDto.limiteCredito !== undefined || createClienteDto.modalidadeCredito !== undefined) this.exigirGestor(req);
     return this.clientesService.create(empresaId, createClienteDto);
   }
 
@@ -104,7 +104,7 @@ export class ClientesController {
     @Body() updateClienteDto: UpdateClienteDto,
     @Req() req: any,
   ) {
-    if (updateClienteDto.limiteCredito !== undefined) this.exigirGestor(req);
+    if (updateClienteDto.limiteCredito !== undefined || updateClienteDto.modalidadeCredito !== undefined) this.exigirGestor(req);
     return this.clientesService.update(empresaId, id, updateClienteDto);
   }
 

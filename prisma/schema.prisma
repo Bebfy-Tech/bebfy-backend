@@ -533,6 +533,12 @@ model ItemNotaFiscal {
 // 5. CLIENTES E GESTÃO INDIVIDUAL DE FIADOS
 // ====================================================
 
+enum ModalidadeCredito {
+  BLOQUEADO
+  LIMITADO
+  ILIMITADO
+}
+
 model Cliente {
   id            String           @id @default(uuid())
   empresaId     Int
@@ -543,6 +549,7 @@ model Cliente {
   telefone      String?
   endereco      String?
   limiteCredito Decimal          @default(0.00)
+  modalidadeCredito ModalidadeCredito @default(BLOQUEADO)
   saldoDevedor  Decimal          @default(0.00)
   cascosEmPosse Int              @default(0)
   ativo         Boolean          @default(true)

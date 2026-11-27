@@ -1,3 +1,4 @@
+import { exigirCredito } from '../clientes/credito';
 import {
   Injectable,
   NotFoundException,
@@ -24,20 +25,7 @@ export class FiadosService {
 
     const valorNum = Number(createFiadoDto.valor);
     const saldoAtual = Number(cliente.saldoDevedor);
-    const limiteCredito = Number(cliente.limiteCredito);
-
-    if (createFiadoDto.tipo === TipoTransacaoFiado.DEBITO) {
-      const saldoProjetado = saldoAtual + valorNum;
-      if (limiteCredito > 0 && saldoProjetado > limiteCredito) {
-        throw new BadRequestException(
-          `Operação bloqueada: O novo saldo (R$ ${saldoProjetado.toFixed(
-            2,
-          )}) ultrapassaria o limite de crédito permitido (R$ ${limiteCredito.toFixed(
-            2,
-          )}).`,
-        );
-      }
-    }
+    if (createFiadoDto.tipo === TipoTransacaoFiado.DEBITO) exigirCredito(cliente, valorNum);
 
     return this.prisma.$transaction(async (tx) => {
       if (createFiadoDto.vendaId) {
@@ -60,6 +48,8 @@ export class FiadosService {
           empresaId,
           ativo: true,
           saldoDevedor: { equals: cliente.saldoDevedor },
+          // Optimistic condition also guards concurrent manager changes to the credit policy.
+          ...(createFiadoDto.tipo===TipoTransacaoFiado.DEBITO?{modalidadeCredito:cliente.modalidadeCredito,limiteCredito:cliente.limiteCredito}:{}),
         },
         data: { saldoDevedor: novoSaldo },
       });

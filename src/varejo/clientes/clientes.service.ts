@@ -5,12 +5,13 @@ import { consultarModulos } from '../../common/modulos/plano-modulos';
 import { CreateClienteDto } from './dto/create-cliente.dto';
 import { UpdateClienteDto } from './dto/update-cliente.dto';
 import { normalizarDocumento, validarDocumento } from './documento';
+import { configurarCredito } from './credito';
 
 @Injectable()
 export class ClientesService {
  constructor(private readonly prisma:PrismaService){}
  private async dados(empresaId:number,dto:UpdateClienteDto,id?:string){
-  const data={...dto};
+  const data={...dto,...configurarCredito(dto.modalidadeCredito,dto.limiteCredito)};
   if(data.nome!==undefined){data.nome=data.nome.trim();if(!data.nome)throw new BadRequestException('Informe o nome do cliente.');}
   // Only normalize a changed document; legacy data can still be viewed and corrected.
   if(data.cpfCnpj!==undefined){
