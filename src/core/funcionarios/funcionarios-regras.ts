@@ -1,6 +1,8 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 
-export const PERMISSOES_FUNCIONARIO = ['VENDAS_CANCELAR','CAIXA_MOVIMENTAR','CAIXA_FECHAR','ESTOQUE_AJUSTAR','PRODUTOS_GERENCIAR','FORNECEDORES_GERENCIAR','LOTES_REMOVER','FIADOS_LANCAR','FIADOS_RECEBER','VASILHAMES_MOVIMENTAR','DELIVERY_ACERTAR'] as const;
+import { RELATORIOS, permissaoRelatorio } from '../../relatorios/catalogo-relatorios';
+
+export const PERMISSOES_FUNCIONARIO = ['VENDAS_CANCELAR','CAIXA_MOVIMENTAR','CAIXA_FECHAR','ESTOQUE_AJUSTAR','PRODUTOS_GERENCIAR','FORNECEDORES_GERENCIAR','LOTES_REMOVER','FIADOS_LANCAR','FIADOS_RECEBER','VASILHAMES_MOVIMENTAR','DELIVERY_ACERTAR',...RELATORIOS.map(r=>permissaoRelatorio(r.codigo))] as const;
 export const gestores = ['GERENTE','ADMINISTRADOR','PROPRIETARIO'];
 export type AtorFuncionario = { id: string; funcionarioId: string };
 export function validarHierarquia(cargo: string, alvo: string) {
