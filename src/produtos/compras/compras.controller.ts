@@ -38,4 +38,8 @@ export class ComprasController {
   @Post(':id/receber') receber(@CurrentTenant() empresaId:number,@Param('id') id:string,@Body() dto:ReceberCompraDto,@Req() req:any){
     return this.service.receber(empresaId,id,dto,this.gestor(req));
   }
+
+  @Post(':id/recebimentos/:recebimentoId/estornar') estornar(@CurrentTenant() empresaId:number,@Param('id') id:string,@Param('recebimentoId') recebimentoId:string,@Body() dto:EncerrarCompraDto,@Req() req:any){
+    return this.service.estornarRecebimento(empresaId,id,recebimentoId,dto.motivo,this.gestor(req));
+  }
 }

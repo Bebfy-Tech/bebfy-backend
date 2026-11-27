@@ -43,7 +43,7 @@ export class FornecedoresService{
   const fornecedor=await this.findOne(empresaId,id);
   const notas=await this.prisma.notaFiscal.findMany({where:{empresaId,fornecedorId:id},orderBy:{dataEmissao:'desc'},take:100,select:{id:true,numeroNota:true,chaveAcesso:true,dataEmissao:true,criadoEm:true,valorTotal:true,itens:{select:{quantidade:true,valorUnitario:true,produto:{select:{id:true,nome:true}}}}}});
   if(!financeiro)return {fornecedor,notas,compras:null,contasPagar:null,saldoPendente:null};
-  const compras=await this.prisma.compra.findMany({where:{empresaId,fornecedorId:id},orderBy:{criadoEm:'desc'},take:100,select:{id:true,codigoCompra:true,status:true,total:true,criadoEm:true,recebimentos:{select:{total:true}}}});
+  const compras=await this.prisma.compra.findMany({where:{empresaId,fornecedorId:id},orderBy:{criadoEm:'desc'},take:100,select:{id:true,codigoCompra:true,status:true,total:true,criadoEm:true,recebimentos:{where:{estornadoEm:null},select:{total:true}}}});
   const [contas,abertas]=await Promise.all([this.prisma.contaPagar.findMany({where:{empresaId,fornecedorId:id},orderBy:{dataVencimento:'desc'},take:100,select:{id:true,descricao:true,categoria:true,valor:true,valorBaixado:true,status:true,dataVencimento:true,notaFiscalId:true}}),this.prisma.contaPagar.findMany({where:{empresaId,fornecedorId:id,status:'PENDENTE'},select:{valor:true,valorBaixado:true}})]);
   return {fornecedor,notas,compras,contasPagar:contas,saldoPendente:pendente(abertas)};
  }

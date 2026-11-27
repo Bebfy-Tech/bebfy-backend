@@ -143,6 +143,7 @@ export class ComprasService {
     return this.serial(async tx => {
       const anterior = await tx.recebimentoCompra.findFirst({ where: { empresaId, chaveOperacao: dto.chaveOperacao } });
       if (anterior) {
+        if (anterior.estornadoEm) throw new ConflictException('Recebimento original estornado. Confira o histórico.');
         if (anterior.compraId !== id || anterior.assinatura !== assinatura) throw new ConflictException('Chave utilizada com outros dados.');
         return this.obter(tx, empresaId, id);
       }
@@ -170,7 +171,8 @@ export class ComprasService {
         const novo = custoMedio(p.estoqueAtual,p.precoCusto,i.unidades,valor);
         const update = await tx.produto.updateMany({where:{empresaId,id:p.id,ativo:true,estoqueAtual:p.estoqueAtual,precoCusto:p.precoCusto,unidadeMedida:item.unidadeBase},data:{estoqueAtual:{increment:i.unidades},precoCusto:novo}});
         if (!update.count) throw new ConflictException('Estoque ou custo alterado. Confira novamente.');
-        const ir=await tx.itemRecebimentoCompra.create({data:{recebimentoId:rec.id,itemCompraId:item.id,unidades:i.unidades,valor,estoqueAnterior:p.estoqueAtual,estoquePosterior:p.estoqueAtual+i.unidades,custoAnterior:p.precoCusto,custoNovo:novo,custoUnitario:valor.div(i.unidades).toDecimalPlaces(6)}});
+        const atualizado=await tx.produto.findUniqueOrThrow({where:{id:p.id},select:{atualizadoEm:true}});
+        const ir=await tx.itemRecebimentoCompra.create({data:{recebimentoId:rec.id,itemCompraId:item.id,unidades:i.unidades,valor,estoqueAnterior:p.estoqueAtual,estoquePosterior:p.estoqueAtual+i.unidades,custoAnterior:p.precoCusto,custoNovo:novo,produtoAtualizadoEm:atualizado.atualizadoEm,custoUnitario:valor.div(i.unidades).toDecimalPlaces(6)}});
         if (i.numeroLote?.trim()||i.validade) await tx.loteProduto.create({data:{empresaId,produtoId:p.id,itemRecebimentoId:ir.id,quantidade:i.unidades,numeroLote:i.numeroLote?.trim()||null,dataVencimento:i.validade?dataCompra(i.validade):null}});
         await tx.movimentacaoEstoque.create({data:{empresaId,produtoId:p.id,tipo:'ENTRADA_COMPRA',quantidade:i.unidades,motivo:'Compra #'+c.codigoCompra+' / recebimento '+rec.id,observacao:dto.observacao.trim()}});
         await tx.historicoCusto.create({data:{produtoId:p.id,custoAnterior:p.precoCusto,custoNovo:novo}});
@@ -180,6 +182,58 @@ export class ComprasService {
       const completo=c.itens.every(x=>x.unidadesRecebidas+(itens.find(i=>i.itemCompraId===x.id)?.unidades??0)===x.unidades);
       const r=await tx.compra.updateMany({where:{id,empresaId,status:c.status},data:{status:completo?'RECEBIDA':'PARCIAL'}});
       if(!r.count)throw new ConflictException('Pedido alterado.');
+      return this.obter(tx,empresaId,id);
+    });
+  }
+
+  /** Estorno integral de uma entrada recente, sem apagar a trilha de auditoria. */
+  async estornarRecebimento(empresaId:number,id:string,recebimentoId:string,motivo:string,operadorId:string){
+    const texto=motivo.trim();
+    if(!texto)throw new BadRequestException('Informe o motivo do estorno.');
+    return this.serial(async tx=>{
+      await tx.empresa.update({where:{id:empresaId},data:{atualizadoEm:new Date()}});
+      const c=await this.obter(tx,empresaId,id);
+      const r=c.recebimentos.find(x=>x.id===recebimentoId);
+      if(!r)throw new NotFoundException('Recebimento não encontrado neste pedido.');
+      if(r.estornadoEm){
+        if(r.motivoEstorno===texto)return c;
+        throw new ConflictException('Recebimento já estornado.');
+      }
+      if(!['PARCIAL','RECEBIDA'].includes(c.status))throw new BadRequestException('Pedido encerrado ou situação incompatível.');
+      if(c.recebimentos.find(x=>!x.estornadoEm)?.id!==r.id)throw new BadRequestException('Somente o recebimento ativo mais recente pode ser estornado.');
+      // Never undo any payable with a payment history, even if the payment itself was reversed.
+      const contas=await tx.contaPagar.findMany({where:{empresaId,recebimentoCompraId:r.id},include:{_count:{select:{baixas:true}}}});
+      for(const conta of contas){
+        if(conta.status==='PAGO'||!conta.valorBaixado.isZero()||conta._count.baixas)
+          throw new BadRequestException('Há histórico de pagamento. A devolução exige conciliação financeira específica.');
+        if(conta.status==='PENDENTE'){
+          const res=await tx.contaPagar.updateMany({where:{empresaId,id:conta.id,status:'PENDENTE',valorBaixado:0},data:{status:'CANCELADO'}});
+          if(!res.count)throw new ConflictException('Conta alterada durante o estorno.');
+        }
+      }
+      const itens=r.itens.map(i=>({i,pedido:c.itens.find(x=>x.id===i.itemCompraId)!})).sort((a,b)=>a.pedido.produtoId-b.pedido.produtoId);
+      for(const {i,pedido} of itens){
+        if(!i.produtoAtualizadoEm||pedido.unidadesRecebidas<i.unidades)throw new BadRequestException('Recebimento sem referência segura para estorno automático.');
+        const p=await tx.produto.findFirst({where:{empresaId,id:pedido.produtoId}});
+        if(!p||p.estoqueAtual!==i.estoquePosterior||!p.precoCusto.equals(i.custoNovo)||p.atualizadoEm.getTime()!==i.produtoAtualizadoEm.getTime()||p.unidadeMedida!==pedido.unidadeBase)
+          throw new BadRequestException('Produto alterado após a entrada: '+pedido.produtoNome+'. Estorno automático indisponível.');
+        const movimentos=await tx.movimentacaoEstoque.count({where:{empresaId,produtoId:p.id,criadoEm:{gte:r.criadoEm},NOT:{motivo:'Compra #'+c.codigoCompra+' / recebimento '+r.id}}});
+        if(movimentos)throw new BadRequestException('Existem outras movimentações após a entrada de '+pedido.produtoNome+'.');
+        if(i.lote){
+          const lote=await tx.loteProduto.updateMany({where:{empresaId,produtoId:p.id,id:i.lote.id,itemRecebimentoId:i.id,quantidade:i.unidades},data:{quantidade:0}});
+          if(!lote.count)throw new ConflictException('Lote alterado. Estorno indisponível.');
+        }
+        const updated=await tx.produto.updateMany({where:{empresaId,id:p.id,estoqueAtual:i.estoquePosterior,precoCusto:i.custoNovo,atualizadoEm:i.produtoAtualizadoEm},data:{estoqueAtual:i.estoqueAnterior,precoCusto:i.custoAnterior}});
+        if(!updated.count)throw new ConflictException('Produto alterado durante o estorno.');
+        await tx.movimentacaoEstoque.create({data:{empresaId,produtoId:p.id,tipo:'AJUSTE_SAIDA',quantidade:i.unidades,motivo:'Estorno compra #'+c.codigoCompra+' / recebimento '+r.id,observacao:texto}});
+        await tx.historicoCusto.create({data:{produtoId:p.id,custoAnterior:i.custoNovo,custoNovo:i.custoAnterior}});
+        await tx.itemCompra.update({where:{id:pedido.id},data:{unidadesRecebidas:{decrement:i.unidades}}});
+      }
+      const rec=await tx.recebimentoCompra.updateMany({where:{id:r.id,empresaId,compraId:id,estornadoEm:null},data:{estornadoEm:new Date(),estornadoPor:operadorId,motivoEstorno:texto}});
+      if(!rec.count)throw new ConflictException('Recebimento alterado.');
+      const parcial=c.itens.some(i=>i.unidadesRecebidas-(r.itens.find(x=>x.itemCompraId===i.id)?.unidades??0)>0);
+      const compra=await tx.compra.updateMany({where:{empresaId,id,status:c.status},data:{status:parcial?'PARCIAL':'AGUARDANDO'}});
+      if(!compra.count)throw new ConflictException('Pedido alterado.');
       return this.obter(tx,empresaId,id);
     });
   }
