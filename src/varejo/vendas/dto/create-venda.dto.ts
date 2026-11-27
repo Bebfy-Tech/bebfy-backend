@@ -53,6 +53,10 @@ export class CreatePagamentoVendaDto {
   troco?: number;
 }
 
+export class DevolucaoCascoDto {
+ @IsOptional() @IsInt() @Min(1) tipoVasilhameId?:number|null;
+ @IsInt() @Min(1) quantidade:number;
+}
 export class CreateVendaDto {
   @IsString({ message: 'O ID do caixa deve ser um texto/UUID.' })
   @IsNotEmpty({ message: 'O ID do caixa é obrigatório.' })
@@ -88,6 +92,9 @@ export class CreateVendaDto {
   @IsInt()
   @Min(0)
   cascosDevolvidos?: number;
+
+  @IsOptional() @IsArray() @ArrayMaxSize(100) @ValidateNested({each:true}) @Type(()=>DevolucaoCascoDto)
+  devolucoesCascos?:DevolucaoCascoDto[];
 
   @IsArray({ message: 'Os itens devem ser uma lista.' })
   @ValidateNested({ each: true })

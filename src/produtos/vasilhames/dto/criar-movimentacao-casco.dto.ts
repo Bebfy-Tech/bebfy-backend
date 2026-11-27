@@ -1,30 +1,11 @@
-import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
-
-enum TipoMovimentacaoCascoDto {
-  EMPRESTIMO_SAIDA = 'EMPRESTIMO_SAIDA',
-  DEVOLUCAO_ENTRADA = 'DEVOLUCAO_ENTRADA',
-  QUEBRA_AVARIA = 'QUEBRA_AVARIA',
-}
-
+import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min, MaxLength, IsUUID } from 'class-validator';
+enum TipoMovimentacaoCascoDto { EMPRESTIMO_SAIDA='EMPRESTIMO_SAIDA', DEVOLUCAO_ENTRADA='DEVOLUCAO_ENTRADA', QUEBRA_AVARIA='QUEBRA_AVARIA', CLASSIFICACAO='CLASSIFICACAO' }
 export class CriarMovimentacaoCascoDto {
-  @IsNotEmpty({ message: 'O ID do cliente é obrigatório.' })
-  @IsString()
-  clienteId: string;
-
-  @IsNotEmpty({ message: 'O ID do produto/vasilhame é obrigatório.' })
-  @IsInt()
-  produtoId: number;
-
-  @IsNotEmpty({ message: 'A quantidade é obrigatória.' })
-  @IsInt()
-  @Min(1, { message: 'A quantidade deve ser de no mínimo 1.' })
-  quantidade: number;
-
-  @IsNotEmpty({ message: 'O tipo de movimentação é obrigatório.' })
-  @IsEnum(TipoMovimentacaoCascoDto, { message: 'Tipo de movimentação inválido.' })
-  tipo: TipoMovimentacaoCascoDto;
-
-  @IsOptional()
-  @IsString()
-  observacao?: string;
+ @IsString() @IsNotEmpty() clienteId:string;
+ @IsOptional() @IsInt() @Min(1) produtoId?:number;
+ @IsOptional() @IsInt() @Min(1) tipoVasilhameId?:number|null;
+ @IsInt() @Min(1) quantidade:number;
+ @IsEnum(TipoMovimentacaoCascoDto) tipo:TipoMovimentacaoCascoDto;
+ @IsOptional() @IsString() @MaxLength(500) observacao?:string;
+ @IsOptional() @IsUUID('4') chaveOperacao?:string;
 }

@@ -177,6 +177,10 @@ describe('API operacional: contratos integrados e segurança por empresa', () =>
     const produto = await request(server).post('/produtos').set(headers())
       .send({ nome: 'Garrafa QA retornável', precoVendaVarejo: 2, retornavel: true, estoqueAtual: 10 });
     expect(produto.status).toBe(201);
+    const tipo = await request(server).post('/produtos/vasilhames/tipos').set(headers()).send({nome:'Casco QA'});
+    expect(tipo.status).toBe(201);
+    const vinculo=await request(server).patch('/produtos/vasilhames/produto/'+produto.body.id+'/tipo').set(headers()).send({tipoVasilhameId:tipo.body.id});
+    expect(vinculo.status).toBe(200);
     const emprestimo = await request(server).post('/produtos/vasilhames/movimentacao').set(headers())
       .send({ clienteId, produtoId: produto.body.id, tipo: 'EMPRESTIMO_SAIDA', quantidade: 2 });
     expect(emprestimo.status).toBe(201);

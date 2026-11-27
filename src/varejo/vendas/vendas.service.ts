@@ -1,3 +1,4 @@
+import { aplicarCasco } from '../../produtos/vasilhames/saldos';
 import { exigirCredito } from '../clientes/credito';
 import {
   Injectable,
@@ -30,7 +31,9 @@ export class VendasService {
     if (!modulos.FIADOS && createVendaDto.pagamentos.some(p => p.formaPagamento === FormaPagamento.FIADO)) {
       throw new ForbiddenException('Módulo de fiados desativado.');
     }
-    if (!modulos.VASILHAMES_RETORNAVEIS && Number(createVendaDto.cascosDevolvidos || 0) > 0) {
+    const devolucoes=createVendaDto.devolucoesCascos??[];
+    if(devolucoes.length&&Number(createVendaDto.cascosDevolvidos||0)>0)throw new BadRequestException('Informe devoluções por tipo ou saldo antigo, não ambos os formatos.');
+    if (!modulos.VASILHAMES_RETORNAVEIS && (Number(createVendaDto.cascosDevolvidos || 0) > 0||devolucoes.length)) {
       throw new ForbiddenException('Módulo de vasilhames desativado.');
     }
     const caixa = await this.prisma.caixa.findUnique({
@@ -68,10 +71,10 @@ export class VendasService {
     if(!modulos.CAIXA_PDV)throw new ForbiddenException('Módulo de PDV desativado.');
     if(createVendaDto.tipoEntrega===TipoEntrega.DELIVERY&&!createVendaDto.enderecoEntrega?.trim())throw new BadRequestException('Informe o endereço da entrega.');
     if(createVendaDto.tipoEntrega!==TipoEntrega.DELIVERY&&Number(createVendaDto.taxaEntrega||0)>0)throw new BadRequestException('Taxa de entrega exige delivery.');
-    if(Number(createVendaDto.cascosDevolvidos||0)>0&&!createVendaDto.clienteId)throw new BadRequestException('Informe o cliente para devolver vasilhames.');
+    if((Number(createVendaDto.cascosDevolvidos||0)>0||devolucoes.length)&&!createVendaDto.clienteId)throw new BadRequestException('Informe o cliente para devolver vasilhames.');
     if(createVendaDto.pagamentos.some(p=>Number(p.troco||0)>Number(p.valor)))throw new BadRequestException('Troco não pode superar o pagamento.');
     let subtotal = 0;
-    let totalCascosNovos = 0;
+
 
     for (const item of createVendaDto.itens) {
       const produto = await this.prisma.produto.findFirst({
@@ -92,9 +95,7 @@ export class VendasService {
         );
       }
 
-      if (modulos.VASILHAMES_RETORNAVEIS && produto.retornavel) {
-        totalCascosNovos += unidadesParaAbater;
-      }
+
 
       if(!Number.isInteger(item.quantidade)||item.quantidade<1)throw new BadRequestException('Quantidade inválida.');
       if(item.isFardo&&Number(produto.fardoQuantidade||1)<2)throw new BadRequestException('Produto sem fardo cadastrado.');
@@ -181,6 +182,7 @@ export class VendasService {
           tipoEntrega: createVendaDto.tipoEntrega || 'RETIRADA_BALCAO',
           status: StatusVenda.CONCLUIDA,
           statusAcerto,
+          vasilhamesControlados:true,
           empresaId,
         },
       });
@@ -206,11 +208,16 @@ export class VendasService {
         });
 
         const baixa = await tx.produto.updateMany({
-          where: { id: item.produtoId, empresaId, ativo: true, estoqueAtual: { gte: unidadesParaAbater } },
+          where: { id: item.produtoId, empresaId, ativo: true, estoqueAtual: { gte: unidadesParaAbater }, retornavel:produto.retornavel,tipoVasilhameId:produto.tipoVasilhameId },
           data: { estoqueAtual: { decrement: unidadesParaAbater } },
         });
         if (baixa.count !== 1) {
           throw new BadRequestException('Estoque insuficiente ou produto indisponível durante a finalização da venda.');
+        }
+        if(modulos.VASILHAMES_RETORNAVEIS&&createVendaDto.clienteId&&produto.retornavel){
+          if(!produto.tipoVasilhameId)throw new BadRequestException('Associe '+produto.nome+' a um tipo de vasilhame antes da venda.');
+          if(!await tx.tipoVasilhame.findFirst({where:{id:produto.tipoVasilhameId,empresaId}}))throw new BadRequestException('Tipo de vasilhame inválido.');
+          await aplicarCasco(tx,empresaId,createVendaDto.clienteId,{tipoVasilhameId:produto.tipoVasilhameId,produtoId:produto.id,quantidade:unidadesParaAbater,origem:'VENDA',vendaId:venda.id});
         }
       }
 
@@ -225,15 +232,12 @@ export class VendasService {
         });
       }
 
-      if (createVendaDto.clienteId && (totalCascosNovos > 0 || createVendaDto.cascosDevolvidos)) {
-        const cascosDevolvidos = createVendaDto.cascosDevolvidos || 0;
-        const variacaoCascos = totalCascosNovos - cascosDevolvidos;
-
-        const alteracao=await tx.cliente.updateMany({
-          where:{id:createVendaDto.clienteId,empresaId,ativo:true,...(variacaoCascos<0?{cascosEmPosse:{gte:-variacaoCascos}}:{})},
-          data:{cascosEmPosse:{increment:variacaoCascos}},
-        });
-        if(alteracao.count!==1)throw new BadRequestException('Saldo insuficiente de vasilhames ou cliente indisponível.');
+      if(createVendaDto.clienteId&&modulos.VASILHAMES_RETORNAVEIS){
+        const retornos=devolucoes.length?devolucoes:(createVendaDto.cascosDevolvidos?[{tipoVasilhameId:null,quantidade:createVendaDto.cascosDevolvidos}]:[]);
+        for(const d of retornos){
+          if(d.tipoVasilhameId!=null&&!await tx.tipoVasilhame.findFirst({where:{id:d.tipoVasilhameId,empresaId}}))throw new BadRequestException('Tipo de vasilhame inválido.');
+          await aplicarCasco(tx,empresaId,createVendaDto.clienteId,{tipoVasilhameId:d.tipoVasilhameId??null,quantidade:-d.quantidade,origem:'DEVOLUCAO_PDV',vendaId:venda.id});
+        }
       }
 
       if (valorFiado > 0 && createVendaDto.clienteId) {
@@ -376,12 +380,10 @@ export class VendasService {
       if (bloqueio.count !== 1) {
         throw new BadRequestException('Esta venda já foi cancelada ou não pode ser cancelada.');
       }
-      let totalCascosParaEstornar = 0;
+      if(venda.clienteId)await tx.cliente.updateMany({where:{id:venda.clienteId,empresaId},data:{atualizadoEm:new Date()}});
 
       // 1. Devolve os produtos ao estoque e contabiliza cascos retornáveis
       for (const item of venda.itens) {
-        const produto = await tx.produto.findUnique({ where: { id: item.produtoId } });
-
         const unidades = item.unidadesEstoque ?? item.quantidade;
 
         await tx.produto.update({
@@ -393,21 +395,14 @@ export class VendasService {
           },
         });
 
-        if (produto?.retornavel) {
-          totalCascosParaEstornar += unidades;
-        }
+
       }
 
-      // 2. Estorno do saldo de cascos em posse do cliente (se houver cliente vinculado)
-      if (venda.clienteId && totalCascosParaEstornar > 0) {
-        await tx.cliente.update({
-          where: { id: venda.clienteId },
-          data: {
-            cascosEmPosse: {
-              decrement: totalCascosParaEstornar,
-            },
-          },
-        });
+      // Reverse the actual net quantities recorded at sale time, not the current product configuration.
+      if(venda.clienteId){
+        if(!venda.vasilhamesControlados&&venda.itens.some(i=>i.produto?.retornavel))throw new BadRequestException('Venda antiga sem histórico de cascos por tipo. Solicite conciliação antes de cancelar.');
+        const movimentos=await tx.movimentacaoCasco.groupBy({by:['tipoVasilhameId'],where:{empresaId,vendaId:id},_sum:{quantidade:true}});
+        for(const m of movimentos){const q=-(m._sum.quantidade??0);if(q)await aplicarCasco(tx,empresaId,venda.clienteId,{tipoVasilhameId:m.tipoVasilhameId,quantidade:q,origem:'ESTORNO',vendaId:id});}
       }
 
       // 3. Estorno do Fiado (se houver pagamento em FIADO)

@@ -106,6 +106,7 @@ model Empresa {
   vendas               Venda[]
   movimentacoesEstoque MovimentacaoEstoque[]
   movimentacoesCasco   MovimentacaoCasco[]
+  tiposVasilhame TipoVasilhame[]
   contasPagar          ContaPagar[]
   contasReceber        ContaReceber[]
   logsAuditoria        LogAuditoria[]
@@ -436,6 +437,8 @@ model Produto {
   estoqueAtual      Int                   @default(0)
   estoqueMinimo     Int                   @default(0)
   retornavel        Boolean               @default(false)
+  tipoVasilhameId   Int?
+  tipoVasilhame     TipoVasilhame? @relation(fields: [tipoVasilhameId], references: [id], onDelete: Restrict)
   ativo             Boolean               @default(true)
   categoriaId       String?
   categoria         Categoria?            @relation(fields: [categoriaId], references: [id])
@@ -707,6 +710,8 @@ model Venda {
   itens           ItemVenda[]
   pagamentos      PagamentoVenda[]
   fiados          HistoricoFiado[]
+  vasilhamesControlados Boolean @default(false)
+  movimentacoesCasco MovimentacaoCasco[]
 }
 
 model ItemVenda {
@@ -770,18 +775,48 @@ model MovimentacaoEstoque {
   criadoEm   DateTime                @default(now())
 }
 
+model TipoVasilhame {
+  id Int @id @default(autoincrement())
+  empresaId Int
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nome String
+  criadoEm DateTime @default(now())
+  produtos Produto[]
+  movimentos MovimentacaoCasco[]
+  @@unique([empresaId, nome])
+}
+
+enum OrigemCasco {
+  LEGADO
+  EMPRESTIMO_SAIDA
+  DEVOLUCAO_ENTRADA
+  QUEBRA_AVARIA
+  CLASSIFICACAO
+  VENDA
+  DEVOLUCAO_PDV
+  ESTORNO
+}
+
 model MovimentacaoCasco {
   id         String   @id @default(uuid())
   empresaId  Int
   empresa    Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   clienteId  String
   cliente    Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
-  produtoId  Int
-  produto    Produto  @relation(fields: [produtoId], references: [id])
+  produtoId  Int?
+  produto    Produto? @relation(fields: [produtoId], references: [id], onDelete: Restrict)
+  tipoVasilhameId Int?
+  tipoVasilhame TipoVasilhame? @relation(fields: [tipoVasilhameId], references: [id], onDelete: Restrict)
+  vendaId String?
+  venda Venda? @relation(fields: [vendaId], references: [id], onDelete: Restrict)
+  origem OrigemCasco @default(LEGADO)
+  chaveOperacao String? @unique
   quantidade Int      // Positivo para entrega, negativo para devolução
   observacao String?
   criadoEm   DateTime @default(now())
 
+  @@index([empresaId, clienteId, tipoVasilhameId])
+  @@index([empresaId, vendaId])
   @@map("movimentacoes_cascos")
 }
 
