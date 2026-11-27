@@ -2,6 +2,7 @@ import { formasOperacionais, resolverPagamento } from '../../financeiro/pagament
 import { AtualizarEntregaDto } from './dto/delivery.dto';
 import { validarTransicaoEntrega, resumoDelivery } from './delivery-regras';
 import { aplicarCasco } from '../../produtos/vasilhames/saldos';
+import { exigirDocumentoVenda } from '../../core/configuracoes/configuracoes-regras';
 import { exigirCredito } from '../clientes/credito';
 import {
   Injectable,
@@ -177,6 +178,11 @@ export class VendasService {
         if (clienteAtivo.count !== 1) throw new BadRequestException('Cliente inativo ou indisponível.');
       }
 
+      const configVenda = await tx.configGlobal.findUnique({where:{empresaId},select:{obrigarCpfClienteVenda:true}});
+      if(configVenda?.obrigarCpfClienteVenda){
+        const cliente = createVendaDto.clienteId ? await tx.cliente.findFirst({where:{id:createVendaDto.clienteId,empresaId,ativo:true},select:{cpfCnpj:true}}) : null;
+        exigirDocumentoVenda(true,cliente?.cpfCnpj);
+      }
       const venda = await tx.venda.create({
         data: {
           caixaId: createVendaDto.caixaId,

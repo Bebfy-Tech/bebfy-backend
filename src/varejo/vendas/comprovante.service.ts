@@ -24,7 +24,7 @@ export class ComprovanteService {
         where: { id: empresaId },
         select: {
           nomeFantasia: true,
-          config: { select: { telefone: true, endereco: true } },
+          config: { select: { telefone: true, endereco: true, mensagemComprovante:true } },
         },
       }),
     ]);
@@ -40,6 +40,7 @@ export class ComprovanteService {
         nome: empresa.nomeFantasia,
         telefone: empresa.config?.telefone ?? null,
         endereco: empresa.config?.endereco ?? null,
+        mensagem: empresa.config?.mensagemComprovante ?? null,
       },
       venda: {
         id: venda.id,

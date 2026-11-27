@@ -401,6 +401,7 @@ model ConfigGlobal {
   cnpj                   String?
   telefone               String?
   endereco               String?
+  mensagemComprovante     String?  @db.VarChar(240)
   obrigarCpfClienteVenda Boolean  @default(false)
   bloquearFiadoAtrasado  Boolean  @default(true)
   criadoEm               DateTime @default(now())

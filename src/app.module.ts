@@ -8,6 +8,7 @@ import { TenantMiddleware } from './core/tenant/tenant.middleware';
 // Core
 import { PrismaModule } from './core/prisma/prisma.module';
 import { AuthModule } from './core/auth/auth.module';
+import { ConfiguracoesModule } from './core/configuracoes/configuracoes.module';
 import { FuncionariosModule } from './core/funcionarios/funcionarios.module';
 
 // Varejo / PDV
@@ -50,6 +51,7 @@ import { ImportacaoXmlModule } from './produtos/importacao-xml/importacao-xml.mo
     PrismaModule,
     AuthModule,
     FuncionariosModule,
+    ConfiguracoesModule,
 
     // Varejo
     CaixaModule,
