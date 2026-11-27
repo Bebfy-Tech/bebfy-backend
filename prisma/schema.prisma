@@ -106,6 +106,7 @@ model Empresa {
   clientes             Cliente[]
   caixas               Caixa[]
   vendas               Venda[]
+  inventarios InventarioEstoque[]
   movimentacoesEstoque MovimentacaoEstoque[]
   movimentacoesCasco   MovimentacaoCasco[]
   tiposVasilhame TipoVasilhame[]
@@ -465,6 +466,7 @@ model Produto {
   itensCompra ItemCompra[]
   itensVenda        ItemVenda[]
   itensNotaFiscal   ItemNotaFiscal[]
+  itensInventario ItemInventarioEstoque[]
   movimentacoes     MovimentacaoEstoque[]
   movimentacoesCasco MovimentacaoCasco[]
 
@@ -1227,4 +1229,42 @@ model ItemRecebimentoCompra {
   produtoAtualizadoEm DateTime?
   lote LoteProduto?
   @@unique([recebimentoId,itemCompraId])
+}
+
+enum StatusInventarioEstoque {
+  ABERTO
+  FECHADO
+  CANCELADO
+}
+
+model InventarioEstoque {
+  id String @id @default(uuid())
+  empresaId Int
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  status StatusInventarioEstoque @default(ABERTO)
+  revisao Int @default(0)
+  abertoPorId String
+  encerradoPorId String?
+  motivoEncerramento String?
+  criadoEm DateTime @default(now())
+  encerradoEm DateTime?
+  atualizadoEm DateTime @updatedAt
+  itens ItemInventarioEstoque[]
+  @@index([empresaId, criadoEm])
+}
+
+model ItemInventarioEstoque {
+  id String @id @default(uuid())
+  inventarioId String
+  inventario InventarioEstoque @relation(fields: [inventarioId], references: [id], onDelete: Cascade)
+  produtoId Int
+  produto Produto @relation(fields: [produtoId], references: [id], onDelete: Restrict)
+  nome String
+  codigoBarras String?
+  saldoInicial Int
+  produtoAtualizadoEm DateTime
+  contagem Int?
+  contadoPorId String?
+  contadoEm DateTime?
+  @@unique([inventarioId, produtoId])
 }
