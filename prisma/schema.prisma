@@ -101,6 +101,7 @@ model Empresa {
   lotes                LoteProduto[]
   fornecedores         Fornecedor[]
   compras Compra[]
+  recebimentosCompra RecebimentoCompra[]
   notasFiscais         NotaFiscal[]
   clientes             Cliente[]
   caixas               Caixa[]
@@ -1157,6 +1158,7 @@ model Compra {
   encerradoPor String?
   motivoEncerramento String?
   itens ItemCompra[]
+  recebimentos RecebimentoCompra[]
   @@index([empresaId,status,criadoEm])
   @@index([fornecedorId])
 }
@@ -1177,5 +1179,35 @@ model ItemCompra {
   custoEmbalagem Decimal
   subtotal Decimal
   total Decimal
+  recebimentos ItemRecebimentoCompra[]
   @@unique([compraId,produtoId])
+}
+
+model RecebimentoCompra {
+  id String @id @default(uuid())
+  empresaId Int
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  compraId String
+  compra Compra @relation(fields: [compraId], references: [id], onDelete: Restrict)
+  total Decimal
+  observacao String
+  operadorId String
+  chaveOperacao String @unique
+  criadoEm DateTime @default(now())
+  itens ItemRecebimentoCompra[]
+  @@index([compraId])
+  @@index([empresaId,criadoEm])
+}
+
+model ItemRecebimentoCompra {
+  id String @id @default(uuid())
+  recebimentoId String
+  recebimento RecebimentoCompra @relation(fields: [recebimentoId], references: [id], onDelete: Restrict)
+  itemCompraId String
+  itemCompra ItemCompra @relation(fields: [itemCompraId], references: [id], onDelete: Restrict)
+  unidades Int
+  valor Decimal
+  estoqueAnterior Int
+  estoquePosterior Int
+  @@unique([recebimentoId,itemCompraId])
 }
