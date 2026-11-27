@@ -1,3 +1,5 @@
+import { ComprasController } from './compras/compras.controller';
+import { ComprasService } from './compras/compras.service';
 import { UnidadesController } from './unidades.controller';
 import { UnidadesService } from './unidades-medida';
 import { Module } from '@nestjs/common';
@@ -7,8 +9,8 @@ import { PrismaModule } from '../core/prisma/prisma.module';
 
 @Module({
   imports: [PrismaModule],
-  controllers: [ProdutosController, UnidadesController],
-  providers: [ProdutosService, UnidadesService],
+  controllers: [ProdutosController, UnidadesController, ComprasController],
+  providers: [ProdutosService, UnidadesService, ComprasService],
   exports: [ProdutosService],
 })
 export class ProdutosModule {}
