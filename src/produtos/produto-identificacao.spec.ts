@@ -33,7 +33,7 @@ describe('Identificação comercial e fiscal do produto', () => {
   });
   it('lê NCM e CEST como texto no preview do XML sem atualizar produto', async () => {
     const findMany=vi.fn().mockResolvedValue([]);
-    const prisma:any={empresa:{findUnique:vi.fn().mockResolvedValue(null)},fornecedor:{findFirst:vi.fn().mockResolvedValue(null)},notaFiscal:{findUnique:vi.fn().mockResolvedValue(null)},produto:{findMany}};
+    const prisma:any={empresa:{findUnique:vi.fn().mockResolvedValue(null)},$queryRaw:vi.fn().mockResolvedValue([]),fornecedor:{findFirst:vi.fn().mockResolvedValue(null)},notaFiscal:{findUnique:vi.fn().mockResolvedValue(null)},produto:{findMany}};
     const xml='<NFe><infNFe Id="NFe'+ '1'.repeat(44)+'"><ide><mod>55</mod><nNF>1</nNF><dhEmi>2026-11-26T12:00:00-03:00</dhEmi></ide><emit><CNPJ>12345678000199</CNPJ><xNome>Fornecedor</xNome></emit><det><prod><xProd>Teste</xProd><NCM>02201000</NCM><CEST>0300100</CEST><qCom>1</qCom><vUnCom>5</vUnCom></prod></det><total><ICMSTot><vNF>5</vNF></ICMSTot></total></infNFe></NFe>';
     const result=await new ImportacaoXmlService(prisma).preview(7,xml);
     expect(result.itens[0]).toMatchObject({ncm:'02201000',cest:'0300100'});

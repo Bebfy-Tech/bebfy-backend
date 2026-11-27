@@ -502,6 +502,14 @@ model Fornecedor {
   empresaId    Int
   empresa      Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   tipoPessoa   TipoPessoa   @default(JURIDICA)
+  codigoFornecedor Int @unique @default(autoincrement())
+  ativo Boolean @default(true)
+  contatoComercial String?
+  cep String?
+  cidade String?
+  uf String?
+  segmento String?
+  atualizadoEm DateTime @updatedAt
   cnpj         String
   razaoSocial  String
   nomeFantasia String?
@@ -516,6 +524,7 @@ model Fornecedor {
   contasPagar ContaPagar[]
 
   @@unique([empresaId, cnpj])
+  @@index([empresaId,ativo])
 }
 
 model NotaFiscal {

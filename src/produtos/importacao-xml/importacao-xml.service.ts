@@ -1,3 +1,4 @@
+import { buscarFornecedorDocumento } from '../fornecedores/documento-fornecedor';
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { PrismaService } from '../../core/prisma/prisma.service';
@@ -57,13 +58,14 @@ export class ImportacaoXmlService {
     const nf=this.parse(xml);
     const [empresa,fornecedor,existente,produtos]=await Promise.all([
       this.prisma.empresa.findUnique({where:{id:empresaId},select:{cnpj:true}}),
-      this.prisma.fornecedor.findFirst({where:{empresaId,cnpj:nf.fornecedor.cnpj},select:{id:true,razaoSocial:true}}),
+      buscarFornecedorDocumento(this.prisma,empresaId,nf.fornecedor.cnpj),
       this.prisma.notaFiscal.findUnique({where:{empresaId_chaveAcesso:{empresaId,chaveAcesso:nf.chave}},select:{id:true}}),
       this.prisma.produto.findMany({where:{empresaId,ativo:true},select:{id:true,nome:true,codigoBarras:true,estoqueAtual:true}}),
     ]);
     if (empresa?.cnpj && cnpj(empresa.cnpj)!==nf.destinatarioCnpj) throw new BadRequestException('O destinatário da NF-e deve corresponder ao CNPJ desta distribuidora.');
     if (existente) throw new ConflictException('Esta NF-e já foi importada para esta distribuidora.');
-    return {...nf,data:nf.data.toISOString(),fornecedorExistente:fornecedor,produtos,
+    if(fornecedor&&!fornecedor.ativo)throw new BadRequestException('Fornecedor inativo. Reative o cadastro antes de importar.');
+    return {...nf,data:nf.data.toISOString(),fornecedorExistente:fornecedor?{id:fornecedor.id,razaoSocial:fornecedor.razaoSocial}:null,produtos,
       itens:nf.itens.map(item=>({...item,produtoSugeridoId:item.ean?produtos.find(p=>p.codigoBarras===item.ean)?.id??null:null}))};
   }
 
@@ -79,7 +81,8 @@ export class ImportacaoXmlService {
     }
     try {
       return await this.prisma.$transaction(async tx=>{
-        let fornecedor=await tx.fornecedor.findFirst({where:{empresaId,cnpj:nf.fornecedor.cnpj}});
+        let fornecedor=await buscarFornecedorDocumento(tx,empresaId,nf.fornecedor.cnpj);
+        if(fornecedor){const lock=await tx.fornecedor.updateMany({where:{id:fornecedor.id,empresaId,ativo:true,cnpj:fornecedor.cnpj},data:{ativo:true}});if(!lock.count)throw new BadRequestException('Fornecedor alterado ou inativo. Atualize a prévia.');}
         if(!fornecedor) fornecedor=await tx.fornecedor.create({data:{
           empresaId,cnpj:nf.fornecedor.cnpj,razaoSocial:nf.fornecedor.razaoSocial || 'Fornecedor do XML'
         }});

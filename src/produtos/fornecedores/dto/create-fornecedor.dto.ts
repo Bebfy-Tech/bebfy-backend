@@ -1,38 +1,20 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
-
-export class CreateFornecedorDto {
-  // Razão Social oficial do fornecedor - Ajustado para corresponder ao schema.prisma
-  @IsString({ message: 'A razão social deve ser um texto.' })
-  @IsNotEmpty({ message: 'A razão social é obrigatória.' })
-  razaoSocial: string;
-
-  // Nome Fantasia comercial - Opcional
-  @IsString({ message: 'O nome fantasia deve ser um texto.' })
-  @IsOptional()
-  nomeFantasia?: string;
-
-  // CNPJ único do fornecedor - Campo Obrigatório
-  @IsString({ message: 'O CNPJ deve ser um texto.' })
-  @IsNotEmpty({ message: 'O CNPJ é obrigatório.' })
-  cnpj: string;
-
-  // Inscrição Estadual (IE) - Opcional
-  @IsString({ message: 'A inscrição estadual deve ser um texto.' })
-  @IsOptional()
-  inscricaoEstadual?: string;
-
-  // Telefone / WhatsApp - Opcional
-  @IsString({ message: 'O telefone deve ser um texto.' })
-  @IsOptional()
-  telefone?: string;
-
-  // E-mail comercial - Opcional
-  @IsEmail({}, { message: 'Forneça um e-mail válido.' })
-  @IsOptional()
-  email?: string;
-
-  // Endereço completo - Opcional
-  @IsString({ message: 'O endereço deve ser um texto.' })
-  @IsOptional()
-  endereco?: string;
+import { IsBoolean, IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { TipoPessoa } from '@prisma/client';
+export class CreateFornecedorDto{
+ @IsString() @IsNotEmpty() @MaxLength(200) razaoSocial:string;
+ // Legacy field name stores either CPF or CNPJ.
+ @IsString() @IsNotEmpty() @MaxLength(30) cnpj:string;
+ @IsOptional() @IsEnum(TipoPessoa) tipoPessoa?:TipoPessoa;
+ @IsOptional() @IsString() @MaxLength(200) nomeFantasia?:string|null;
+ @IsOptional() @IsString() @MaxLength(30) inscricaoEstadual?:string|null;
+ @IsOptional() @IsString() @MaxLength(30) telefone?:string|null;
+ @IsOptional() @IsEmail() @MaxLength(200) email?:string|null;
+ @IsOptional() @IsString() @MaxLength(500) endereco?:string|null;
+ @IsOptional() @IsString() @MaxLength(150) contatoComercial?:string|null;
+ @IsOptional() @IsString() @Matches(/^\d{5}-?\d{3}$/) cep?:string|null;
+ @IsOptional() @IsString() @MaxLength(120) cidade?:string|null;
+ @IsOptional() @IsString() @Matches(/^(AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)$/) uf?:string|null;
+ @IsOptional() @IsString() @MaxLength(120) segmento?:string|null;
+ @IsOptional() @IsString() @MaxLength(1000) observacao?:string|null;
+ @IsOptional() @IsBoolean() ativo?:boolean;
 }

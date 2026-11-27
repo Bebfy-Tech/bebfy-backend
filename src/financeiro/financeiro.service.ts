@@ -27,7 +27,7 @@ export class FinanceiroService {
   const modo=dto.modalidade??'UNICA',n=modo==='UNICA'?1:dto.parcelas??0;
   const parcelas=parcelasMensais(dto.valor,dto.dataVencimento,modo,n);
   return this.prisma.$transaction(async tx=>{
-   if(dto.fornecedorId&&!await tx.fornecedor.findFirst({where:{id:dto.fornecedorId,empresaId}}))throw new BadRequestException('Fornecedor não encontrado.');
+   if(dto.fornecedorId){const lock=await tx.fornecedor.updateMany({where:{id:dto.fornecedorId,empresaId,ativo:true},data:{ativo:true}});if(!lock.count)throw new BadRequestException('Fornecedor não encontrado ou inativo.');}
    if(dto.clienteId&&!await tx.cliente.findFirst({where:{id:dto.clienteId,empresaId}}))throw new BadRequestException('Cliente não encontrado.');
    const categoria=dto.categoriaCadastroId?await tx.cadastroFinanceiro.findFirst({where:{id:dto.categoriaCadastroId,empresaId,ativo:true,tipo:{in:tipo==='pagar'?['CUSTO_FIXO','CUSTO_VARIAVEL']:['RECEITA']}}}):null;
    if(dto.categoriaCadastroId&&!categoria)throw new BadRequestException('Categoria financeira inválida.');
@@ -89,7 +89,7 @@ export class FinanceiroService {
   return {contasPagar,contasReceber,saldoPrevisto:Number(dec(contasReceber.find(c=>c.status==='PENDENTE')!.valor).minus(contasPagar.find(c=>c.status==='PENDENTE')!.valor))};
  }
  async referencias(empresaId:number){
-  const [fornecedores,clientes,modulos]=await Promise.all([this.prisma.fornecedor.findMany({where:{empresaId},select:{id:true,razaoSocial:true},orderBy:{razaoSocial:'asc'}}),this.prisma.cliente.findMany({where:{empresaId,ativo:true},select:{id:true,nome:true,codigoCliente:true},orderBy:{nome:'asc'}}),consultarModulos(this.prisma,empresaId)]);
+  const [fornecedores,clientes,modulos]=await Promise.all([this.prisma.fornecedor.findMany({where:{empresaId,ativo:true},select:{id:true,razaoSocial:true},orderBy:{razaoSocial:'asc'}}),this.prisma.cliente.findMany({where:{empresaId,ativo:true},select:{id:true,nome:true,codigoCliente:true},orderBy:{nome:'asc'}}),consultarModulos(this.prisma,empresaId)]);
   const [fiados,delivery]=await Promise.all([modulos.FIADOS?this.prisma.cliente.aggregate({where:{empresaId},_sum:{saldoDevedor:true}}):null,modulos.ENTREGAS_DELIVERY?this.prisma.venda.findMany({where:{empresaId,status:'CONCLUIDA',tipoEntrega:'DELIVERY',statusAcerto:'PENDENTE'},select:{pagamentos:true}}):[]]);
   return {fornecedores,clientes,fiados:fiados?Number(fiados._sum.saldoDevedor??0):null,delivery:modulos.ENTREGAS_DELIVERY?Number(delivery.flatMap(v=>v.pagamentos).filter(p=>p.formaPagamento!=='FIADO').reduce((a,p)=>a.plus(p.valor.minus(p.troco)),dec(0))):null};
  }

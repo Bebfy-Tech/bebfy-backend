@@ -7,6 +7,8 @@ import {
   Param,
   Delete,
   UseGuards,
+  ParseBoolPipe,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -56,6 +58,17 @@ export class FornecedoresController {
     return this.fornecedoresService.findAll(empresaId);
   }
 
+  private financeiro(req:any){return ['PROPRIETARIO','ADMINISTRADOR','GERENTE'].includes(req.user?.cargo);}
+  @ExigirPermissao('FORNECEDORES_GERENCIAR')
+  @Get('gestao')
+  gestao(@CurrentTenant() empresaId:number,@Req() req:any){return this.fornecedoresService.gestao(empresaId,this.financeiro(req));}
+  @ExigirPermissao('FORNECEDORES_GERENCIAR')
+  @Get(':id/ficha')
+  ficha(@CurrentTenant() empresaId:number,@Param('id') id:string,@Req() req:any){return this.fornecedoresService.ficha(empresaId,id,this.financeiro(req));}
+  @ExigirPermissao('FORNECEDORES_GERENCIAR')
+  @Patch(':id/situacao')
+  situacao(@CurrentTenant() empresaId:number,@Param('id') id:string,@Body('ativo',ParseBoolPipe) ativo:boolean){return this.fornecedoresService.situacao(empresaId,id,ativo);}
+
   @ApiOperation({
     summary: 'Buscar fornecedor por ID',
     description: 'Retorna os detalhes de um fornecedor.',
@@ -87,8 +100,8 @@ export class FornecedoresController {
   }
 
   @ApiOperation({
-    summary: 'Remover fornecedor',
-    description: 'Exclui o registo de um fornecedor.',
+    summary: 'Inativar fornecedor',
+    description: 'Inativa preservando vínculos e histórico.',
   })
   @ApiParam({ name: 'id', description: 'ID do fornecedor' })
   @ApiResponse({ status: 200, description: 'Fornecedor removido com sucesso.' })

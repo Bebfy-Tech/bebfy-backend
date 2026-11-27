@@ -19,7 +19,7 @@ const xml = (quantity='6', cnpjDest='11222333000181') => `<?xml version="1.0" en
 function fixture({ duplicate=false, companyCnpj='11222333000181' }={}) {
  const prisma:any = {
   empresa: {findUnique:vi.fn().mockResolvedValue({cnpj:companyCnpj})},
-  fornecedor: {findFirst:vi.fn().mockResolvedValue(null)},
+  $queryRaw:vi.fn().mockResolvedValue([]),fornecedor:{findFirst:vi.fn().mockResolvedValue(null)},
   notaFiscal:{findUnique:vi.fn().mockResolvedValue(duplicate?{id:'existing'}:null)},
   produto:{findMany:vi.fn().mockResolvedValue([{id:19,nome:'Cerveja 350ml',codigoBarras:'7891234567890',estoqueAtual:10}])},
  };
