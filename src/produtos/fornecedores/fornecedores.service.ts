@@ -42,9 +42,10 @@ export class FornecedoresService{
  async ficha(empresaId:number,id:string,financeiro:boolean){
   const fornecedor=await this.findOne(empresaId,id);
   const notas=await this.prisma.notaFiscal.findMany({where:{empresaId,fornecedorId:id},orderBy:{dataEmissao:'desc'},take:100,select:{id:true,numeroNota:true,chaveAcesso:true,dataEmissao:true,criadoEm:true,valorTotal:true,itens:{select:{quantidade:true,valorUnitario:true,produto:{select:{id:true,nome:true}}}}}});
-  if(!financeiro)return {fornecedor,notas,contasPagar:null,saldoPendente:null};
+  if(!financeiro)return {fornecedor,notas,compras:null,contasPagar:null,saldoPendente:null};
+  const compras=await this.prisma.compra.findMany({where:{empresaId,fornecedorId:id},orderBy:{criadoEm:'desc'},take:100,select:{id:true,codigoCompra:true,status:true,total:true,criadoEm:true,recebimentos:{select:{total:true}}}});
   const [contas,abertas]=await Promise.all([this.prisma.contaPagar.findMany({where:{empresaId,fornecedorId:id},orderBy:{dataVencimento:'desc'},take:100,select:{id:true,descricao:true,categoria:true,valor:true,valorBaixado:true,status:true,dataVencimento:true,notaFiscalId:true}}),this.prisma.contaPagar.findMany({where:{empresaId,fornecedorId:id,status:'PENDENTE'},select:{valor:true,valorBaixado:true}})]);
-  return {fornecedor,notas,contasPagar:contas,saldoPendente:pendente(abertas)};
+  return {fornecedor,notas,compras,contasPagar:contas,saldoPendente:pendente(abertas)};
  }
  async update(empresaId:number,id:string,dto:UpdateFornecedorDto){
   return this.serial(async tx=>{
@@ -54,7 +55,8 @@ export class FornecedoresService{
    if(alterado){
     const doc=documentoFornecedor(dto.cnpj??old.cnpj,tipo);
     const [n,p]=await Promise.all([tx.notaFiscal.count({where:{fornecedorId:id}}),tx.contaPagar.count({where:{fornecedorId:id}})]);
-    if(n||p)throw new BadRequestException('Documento de fornecedor com histórico não pode ser alterado. Cadastre outro fornecedor.');
+    const compras=await tx.compra.count({where:{fornecedorId:id}});
+    if(n||p||compras)throw new BadRequestException('Documento de fornecedor com histórico não pode ser alterado. Cadastre outro fornecedor.');
     const duplicado=await buscarFornecedorDocumento(tx,empresaId,doc);if(duplicado&&duplicado.id!==id)throw new ConflictException('Documento já cadastrado.');
     dados.cnpj=doc;dados.tipoPessoa=tipo;
    }
