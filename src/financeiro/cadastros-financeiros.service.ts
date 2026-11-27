@@ -35,7 +35,7 @@ export class CadastrosFinanceirosService{
   if(forma&&dto.permitePdv&&!fiado&&!['DINHEIRO','PIX','CARTAO_CREDITO','CARTAO_DEBITO'].includes(base??''))throw new BadRequestException('Forma não suportada no PDV.');
   if(conta&&!dto.tipoConta)throw new BadRequestException('Informe o tipo da conta.');
   if(conta&&dto.tipoConta!=='CAIXA_FISICO'&&!dto.bancoId)throw new BadRequestException('Selecione o banco.');
-  return {tipo:dto.tipo,nome,nomeNormalizado:normalizarNome(nome),ativo:dto.ativo??true,formaBase:base??null,fiado,permitePagar:forma&&!fiado&&!!dto.permitePagar,permiteReceber:forma&&!fiado&&!!dto.permiteReceber,permitePdv:forma&&!!dto.permitePdv,maxParcelas:max,taxas,
+  return {tipo:dto.tipo,nome,nomeNormalizado:normalizarNome(nome),ativo:dto.ativo??true,formaBase:base??null,fiado,permitePagar:forma&&!fiado&&!!dto.permitePagar,permiteReceber:forma&&!fiado&&!!dto.permiteReceber,permitePdv:forma&&!!dto.permitePdv,maxParcelas:max,taxas:taxas.map(t=>({parcelas:t.parcelas,taxa:t.taxa,prazoDias:t.prazoDias})),
     bancoId:conta&&dto.tipoConta!=='CAIXA_FISICO'?await this.vinculo(tx,empresaId,dto.bancoId,'BANCO'):null,
     contaId:forma&&!fiado?await this.vinculo(tx,empresaId,dto.contaId,'CONTA'):null,
     operadoraId:cartao?await this.vinculo(tx,empresaId,dto.operadoraId,'OPERADORA'):null,
