@@ -7,7 +7,7 @@ const schema=z.object({
  status:z.enum(['TODAS','ATIVA','EM_TESTE','SUSPENSA','CANCELADA']).default('TODAS'),
  plano: z.union([z.literal('TODOS'),z.literal('SEM_PLANO'),inteiro(2147483647)]).default('TODOS'),
  financeiro:z.enum(['TODOS','REGULAR','INADIMPLENTE','CORTESIA','BLOQUEADO']).default('TODOS'),
- pagina:inteiro(100000).default('1'),
+ pagina:inteiro(100000).default(1),
  limite:z.enum(['10','20','50']).default('10').transform(Number),
  ordem:z.enum(['RECENTES','NOME','ANTIGOS']).default('RECENTES'),
 }).strict();
