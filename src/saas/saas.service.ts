@@ -4,7 +4,7 @@ import { inicializarCadastros } from '../financeiro/cadastros-padroes';
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../core/prisma/prisma.service';
 import { StatusEmpresa, NomeModulo, Prisma } from '@prisma/client';
-import { MODULOS_PADRAO, MODULOS_IMPLEMENTADOS } from '../common/modulos/plano-modulos';
+import { MODULOS_PADRAO, MODULOS_IMPLEMENTADOS, resolverModulos } from '../common/modulos/plano-modulos';
 import { CriarEmpresaDto } from './dto/criar-empresa.dto';
 import { CriarCobrancaSaasDto } from './dto/cobranca-saas.dto';
 import { RegistrarPagamentoSaasDto } from './dto/registrar-pagamento-saas.dto';
@@ -734,6 +734,31 @@ export class SaasService {
     return this.prisma.empresa.update({
       where: { id },
       data: { status },
+    });
+  }
+
+  // MODULOS permission grants only entitlement data, not private client records.
+  async listarVisaoModulos() {
+    const empresas=await this.prisma.empresa.findMany({
+      select:{id:true,nomeFantasia:true,slug:true,status:true,planoId:true,
+        plano:{select:{id:true,nome:true,modulosPadrao:true}},
+        modulosAtivos:{select:{modulo:true,ativo:true}}},
+      orderBy:[{nomeFantasia:'asc'},{id:'asc'}],
+    });
+    return empresas.map(e=>({...e,efetivos:resolverModulos(e)}));
+  }
+
+  async restaurarModuloEmpresa(empresaId:number,modulo:string) {
+    if (!Object.values(NomeModulo).includes(modulo as NomeModulo)) throw new BadRequestException('Módulo inválido.');
+    const key=modulo as NomeModulo;
+    return this.prisma.$transaction(async tx=>{
+      const empresa=await tx.empresa.findUnique({where:{id:empresaId},select:{id:true}});
+      if(!empresa)throw new NotFoundException('Distribuidora não encontrada.');
+      await tx.empresaModulo.deleteMany({where:{empresaId,modulo:key}});
+      const atual=await tx.empresa.findUniqueOrThrow({where:{id:empresaId},select:{
+        plano:{select:{modulosPadrao:true}},modulosAtivos:{select:{modulo:true,ativo:true}},
+      }});
+      return {modulo:key,ativo:resolverModulos(atual)[key]};
     });
   }
 

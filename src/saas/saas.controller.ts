@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
   ParseIntPipe,
@@ -258,6 +259,18 @@ export class SaasController {
   @Post('empresas/:id/liberar-acesso')
   liberarAcesso(@Param('id', ParseIntPipe) id: number, @Req() req: any, @Body() dto: LiberarAcessoTemporarioDto) {
     return this.saasService.liberarTemporariamente(id, req.saasUser.id, dto.dias, dto.motivo);
+  }
+
+  @UseGuards(SaasPermissionGuard('MODULOS'))
+  @Get('modulos/visao')
+  listarVisaoModulos() {
+    return this.saasService.listarVisaoModulos();
+  }
+
+  @UseGuards(SaasPermissionGuard('MODULOS'))
+  @Delete('empresas/:id/modulos/:modulo')
+  restaurarModuloEmpresa(@Param('id', ParseIntPipe) id:number,@Param('modulo') modulo:string) {
+    return this.saasService.restaurarModuloEmpresa(id,modulo);
   }
 
   @UseGuards(SaasPermissionGuard('MODULOS'))
