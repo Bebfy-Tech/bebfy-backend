@@ -132,35 +132,39 @@ export class SaasService {
   }
 
   async listarMonitoramento() {
-    const [empresas, usuarios] = await Promise.all([
-      this.prisma.empresa.findMany({
-        select: { id: true, nomeFantasia: true, slug: true, status: true,
-          inadimplente: true, criadoEm: true,
-          _count: { select: { funcionarios: true, produtos: true, vendas: true } } },
-        orderBy: { nomeFantasia: 'asc' },
-      }),
-      this.prisma.usuario.findMany({
-        select: { ativo: true, ultimaAtividadeEm: true,
-          funcionario: { select: { empresaId: true } } },
-      }),
-    ]);
-    const porEmpresa = new Map<number, { ativos: number; ultimaAtividade: Date | null; acessosRecentes: number }>();
-    const seteDiasAtras = Date.now() - 7 * 86400000;
-    for (const usuario of usuarios) {
-      const id = usuario.funcionario.empresaId;
-      const row = porEmpresa.get(id) || { ativos: 0, ultimaAtividade: null, acessosRecentes: 0 };
-      if (usuario.ativo) row.ativos++;
-      if (usuario.ultimaAtividadeEm && (!row.ultimaAtividade || row.ultimaAtividade < usuario.ultimaAtividadeEm)) {
-        row.ultimaAtividade = usuario.ultimaAtividadeEm;
+    // Snapshot of recorded activity, not a live presence or infrastructure probe.
+    const agora=new Date();
+    const seteDiasAtras=new Date(agora.getTime()-7*86400000);
+    return this.prisma.$transaction(async tx=>{
+      const empresas=await tx.empresa.findMany({
+        select:{id:true,nomeFantasia:true,slug:true,status:true,inadimplente:true,
+          liberacaoFinanceiraAte:true,criadoEm:true,plano:{select:{nome:true}},
+          _count:{select:{funcionarios:true,produtos:true,vendas:true,clientes:true}}},
+        orderBy:[{nomeFantasia:'asc'},{id:'asc'}],
+      });
+      const usuarios=await tx.usuario.findMany({
+        select:{ativo:true,ultimaAtividadeEm:true,funcionario:{select:{empresaId:true,ativo:true}}},
+      });
+      const vendas=await tx.venda.groupBy({
+        by:['empresaId'],where:{status:'CONCLUIDA',criadoEm:{gte:seteDiasAtras,lte:agora}},_count:{_all:true},
+      });
+      const porEmpresa=new Map<number,{ativos:number;ultimaAtividade:Date|null;acessosRecentes:number}>();
+      for(const usuario of usuarios){
+        const id=usuario.funcionario.empresaId;
+        const row=porEmpresa.get(id)??{ativos:0,ultimaAtividade:null,acessosRecentes:0};
+        if(usuario.ativo&&usuario.funcionario.ativo)row.ativos++;
+        if(usuario.ultimaAtividadeEm&&(!row.ultimaAtividade||row.ultimaAtividade<usuario.ultimaAtividadeEm))row.ultimaAtividade=usuario.ultimaAtividadeEm;
+        if(usuario.ultimaAtividadeEm&&usuario.ultimaAtividadeEm>=seteDiasAtras)row.acessosRecentes++;
+        porEmpresa.set(id,row);
       }
-      if (usuario.ultimaAtividadeEm?.getTime() && usuario.ultimaAtividadeEm.getTime() >= seteDiasAtras) row.acessosRecentes++;
-      porEmpresa.set(id, row);
-    }
-    return empresas.map(e => ({
-      ...e, usuariosAtivos: porEmpresa.get(e.id)?.ativos ?? 0,
-      usuariosRecentes: porEmpresa.get(e.id)?.acessosRecentes ?? 0,
-      ultimoAcesso: porEmpresa.get(e.id)?.ultimaAtividade ?? null,
-    }));
+      const vendasPorEmpresa=new Map(vendas.map(v=>[v.empresaId,v._count._all]));
+      return empresas.map(e=>({...e,usuariosAtivos:porEmpresa.get(e.id)?.ativos??0,
+        usuariosRecentes:porEmpresa.get(e.id)?.acessosRecentes??0,
+        ultimoAcesso:porEmpresa.get(e.id)?.ultimaAtividade??null,
+        vendasConcluidas7d:vendasPorEmpresa.get(e.id)??0,
+        consultadoEm:agora,
+      }));
+    },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
   }
 
   async listarEmpresasSuporte() {
