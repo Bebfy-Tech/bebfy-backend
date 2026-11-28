@@ -794,10 +794,32 @@ export class SaasService {
     });
   }
 
+  // Counts are aggregated in the database; PLANOS operators do not need
+  // access to private tenant details to see their commercial portfolio.
   async listarPlanos() {
-    return this.prisma.plano.findMany({
-      orderBy: { precoMensal: 'asc' },
-    });
+    return this.prisma.$transaction(async tx => {
+      const planos = await tx.plano.findMany({orderBy: [{precoMensal:'asc'},{id:'asc'}]});
+      const grupos = await tx.empresa.groupBy({
+        by: ['planoId','status'],
+        where: {planoId:{not:null}},
+        _count: {_all:true},
+      });
+      const porPlano = new Map<number,{ATIVA:number;EM_TESTE:number;SUSPENSA:number;CANCELADA:number}>();
+      for (const grupo of grupos) {
+        if (grupo.planoId === null) continue;
+        const contagem = porPlano.get(grupo.planoId) ?? {ATIVA:0,EM_TESTE:0,SUSPENSA:0,CANCELADA:0};
+        contagem[grupo.status] = grupo._count._all;
+        porPlano.set(grupo.planoId,contagem);
+      }
+      return planos.map(plano => {
+        const contagem = porPlano.get(plano.id) ?? {ATIVA:0,EM_TESTE:0,SUSPENSA:0,CANCELADA:0};
+        return {...plano, resumo: {
+          total: Object.values(contagem).reduce((a,b)=>a+b,0),
+          ativas:contagem.ATIVA, emTeste:contagem.EM_TESTE,
+          suspensas:contagem.SUSPENSA, canceladas:contagem.CANCELADA,
+        }};
+      });
+    },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
   }
 
   async alterarPlanoEmpresa(empresaId: number, planoId: number) {

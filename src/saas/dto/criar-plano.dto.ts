@@ -1,4 +1,4 @@
-import { IsArray, IsEnum, IsNumber, IsOptional, IsPositive, IsString, ArrayUnique, MaxLength, MinLength } from 'class-validator';
+import { IsArray, IsEnum, IsNumber, IsOptional, IsPositive, Max, IsString, ArrayUnique, MaxLength, MinLength } from 'class-validator';
 import { NomeModulo, TipoPlano } from '@prisma/client';
 import { PartialType } from '@nestjs/mapped-types';
 
@@ -13,6 +13,7 @@ export class CriarPlanoDto {
 
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
+  @Max(99999999.99)
   precoMensal: number;
 
   @IsOptional()
