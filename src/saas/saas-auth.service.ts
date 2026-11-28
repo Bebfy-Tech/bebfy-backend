@@ -17,12 +17,15 @@ export class SaasAuthService {
   }
 
   async login(codigo: number, senha: string) {
+    if(!Number.isInteger(codigo)||codigo<1||codigo>2147483647||typeof senha!=='string'||!senha||Buffer.byteLength(senha,'utf8')>72)throw new UnauthorizedException('Login ou senha incorretos.');
     const user = await this.prisma.saasOperador.findUnique({ where: { codigo } });
     if (!user || !user.ativo || !await bcrypt.compare(senha, user.senha)) {
       throw new UnauthorizedException('Login ou senha incorretos.');
     }
     const sessaoId = randomUUID();
-    await this.prisma.saasOperador.update({ where: { id: user.id }, data: { sessaoId } });
+    // Never install a new session using a credential or account changed during bcrypt verification.
+    const claimed=await this.prisma.saasOperador.updateMany({where:{id:user.id,codigo,ativo:true,senha:user.senha},data:{sessaoId}});
+    if(claimed.count!==1)throw new UnauthorizedException('Login ou senha incorretos.');
     return {
       access_token: await this.jwt.signAsync({ sub: user.id, tipo: 'SAAS_ADMIN', sessaoId }, { expiresIn: '8h' }),
       usuario: this.publicUser(user),
@@ -86,26 +89,29 @@ export class SaasAuthService {
     return this.publicUser(user);
   }
 
-  async atualizarPerfil(id: string, input: { nome?: string; email?: string; senhaAtual?: string; novaSenha?: string }) {
-    const existente = await this.prisma.saasOperador.findUnique({ where: { id } });
-    if (!existente?.ativo) throw new UnauthorizedException('Sessão inválida.');
-    if (input.novaSenha && (!input.senhaAtual || !await bcrypt.compare(input.senhaAtual, existente.senha))) {
-      throw new UnauthorizedException('Senha atual incorreta.');
+  async atualizarPerfil(id:string,input:{nome?:string;email?:string|null;senhaAtual?:string;novaSenha?:string},sessaoId:string){
+    const existente=await this.prisma.saasOperador.findUnique({where:{id}});
+    if(!existente?.ativo||!sessaoId||existente.sessaoId!==sessaoId)throw new UnauthorizedException('Sessão inválida.');
+    if(input.nome!==undefined&&(typeof input.nome!=='string'||input.nome.trim().length<2))throw new BadRequestException('Nome inválido.');
+    if(input.novaSenha!==undefined){
+      this.validarSenha(input.novaSenha);
+      if(typeof input.senhaAtual!=='string'||Buffer.byteLength(input.senhaAtual,'utf8')>72||!await bcrypt.compare(input.senhaAtual,existente.senha))throw new BadRequestException('Senha atual incorreta.');
+      if(await bcrypt.compare(input.novaSenha,existente.senha))throw new BadRequestException('A nova senha deve ser diferente da atual.');
     }
-
-    if(input.novaSenha)this.validarSenha(input.novaSenha);
-    if(input.nome!==undefined&&input.nome.trim().length<2)throw new BadRequestException('Nome inválido.');
-    if (!input.nome && input.email === undefined && !input.novaSenha) throw new BadRequestException('Nenhuma alteração informada.');
+    if(input.nome===undefined&&input.email===undefined&&input.novaSenha===undefined)throw new BadRequestException('Nenhuma alteração informada.');
     const novaHash=input.novaSenha?await bcrypt.hash(input.novaSenha,12):undefined;
-    const atualizado = await this.gravar(()=>this.prisma.saasOperador.update({
-      where: { id },
-      data: {
-        ...(input.nome !== undefined ? { nome: input.nome.trim() } : {}),
-        ...(input.email !== undefined ? { email: input.email.trim().toLowerCase() } : {}),
-        ...(input.novaSenha ? { senha: novaHash, sessaoId: null } : {}),
-      },
-    }));
-    return this.publicUser(atualizado);
+    try{
+      // Atomic compare-and-set prevents a revoked session or concurrently reset credential from changing the profile.
+      const atualizado=await this.gravar(()=>this.prisma.saasOperador.update({
+        where:{id,ativo:true,sessaoId,senha:existente.senha},
+        data:{
+          ...(input.nome!==undefined?{nome:input.nome.trim()}:{}),
+          ...(input.email!==undefined?{email:input.email?.trim().toLowerCase()||null}:{}),
+          ...(novaHash?{senha:novaHash,sessaoId:null}:{}),
+        },
+      }));
+      return this.publicUser(atualizado);
+    }catch(e){if(e instanceof Prisma.PrismaClientKnownRequestError&&e.code==='P2025')throw new UnauthorizedException('Sessão administrativa revogada.');throw e;}
   }
 
   async atualizar(id: string, input: { codigo?: number; nome?: string; email?: string | null; senha?: string; senhaAtualAdmin?: string; permissoes?: string[]; ativo?: boolean }, operadorId: string) {

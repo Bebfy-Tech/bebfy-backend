@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Patch, Param, Post, Req, UseGuards, UseInterceptors } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { IsArray, IsBoolean, IsNotEmpty, IsEmail, IsEnum, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import { IsArray, IsBoolean, IsNotEmpty, IsEmail, IsEnum, IsInt, IsOptional, IsString, MaxLength, Max, Min, MinLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { SaasCargo } from '@prisma/client';
 import { SaasAuthService } from './saas-auth.service';
@@ -8,8 +8,8 @@ import { SaasAuditInterceptor } from './saas-audit.interceptor';
 import { SaasAuthGuard, SaasPermissionGuard } from './saas-auth.guard';
 
 class LoginSaasDto {
-  @Type(() => Number) @IsInt() @Min(1) codigo: number;
-  @IsString() @MinLength(1) senha: string;
+  @Type(() => Number) @IsInt() @Min(1) @Max(2147483647) codigo: number;
+  @IsString() @MinLength(1) @MaxLength(72) senha: string;
 }
 class CriarOperadorDto {
   @Type(() => Number) @IsInt() @Min(1) codigo: number;
@@ -28,7 +28,7 @@ class EditarOperadorDto {
   @IsOptional() @IsBoolean() ativo?: boolean;
 }
 class MeuPerfilSaasDto {
-  @IsOptional() @IsEmail() email?: string;
+  @IsOptional() @IsEmail() @MaxLength(254) email?: string|null;
   @IsOptional() @IsString() @MinLength(2) @MaxLength(120) nome?: string;
   @IsOptional() @IsString() senhaAtual?: string;
   @IsOptional() @IsString() @IsNotEmpty() novaSenha?: string;
@@ -43,11 +43,11 @@ export class SaasAuthController {
     const { id, codigo, nome, email, cargo, permissoes, ativo } = req.saasUser;
     return { id, codigo, nome, email, cargo, permissoes, ativo };
   }
-  @Patch('perfil') @UseGuards(SaasAuthGuard) @UseInterceptors(SaasAuditInterceptor)
+  @Patch('perfil') @UseGuards(SaasAuthGuard) @UseInterceptors(SaasAuditInterceptor) @Throttle({strict:{limit:5,ttl:60000}})
   atualizarPerfil(@Req() req: any, @Body() dto: MeuPerfilSaasDto) {
-    return this.service.atualizarPerfil(req.saasUser.id, dto);
+    return this.service.atualizarPerfil(req.saasUser.id, dto,req.saasUser.sessaoId);
   }
-  @Post('logout') @HttpCode(200) @UseGuards(SaasAuthGuard)
+  @Post('logout') @HttpCode(200) @UseGuards(SaasAuthGuard) @UseInterceptors(SaasAuditInterceptor)
   sair(@Req() req: any) { return this.service.sair(req.saasUser.id, req.saasUser.sessaoId); }
 }
 @Controller('saas/admin/funcionarios')
