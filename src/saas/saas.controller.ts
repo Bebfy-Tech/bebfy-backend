@@ -40,6 +40,12 @@ export class SaasController {
   constructor(private readonly saasService: SaasService) {}
 
   @UseGuards(SaasPermissionGuard('FUNCIONARIOS'))
+  @Get('auditoria/paginada')
+  listarAuditoriaPaginada(@Query() query:unknown){
+    return this.saasService.listarAuditoriaPaginada(query);
+  }
+
+  @UseGuards(SaasPermissionGuard('FUNCIONARIOS'))
   @Get('auditoria')
   listarAuditoria() {
     return this.saasService.listarAuditoria();

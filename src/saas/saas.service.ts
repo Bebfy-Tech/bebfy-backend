@@ -1,3 +1,4 @@
+import { consultaAuditoria } from './auditoria-consulta';
 import { consultaEmpresas } from './empresas-consulta';
 import { inicializarUnidades } from '../produtos/unidades-medida';
 import { inicializarCadastros } from '../financeiro/cadastros-padroes';
@@ -122,6 +123,24 @@ export class SaasService {
       });
       return { empresa, responsavel };
     });
+  }
+
+  // Paginate the entire recorded history; do not cap results at the latest 1,000.
+  async listarAuditoriaPaginada(query:unknown){
+    const {where,orderBy,pagina,limite}=consultaAuditoria(query);
+    return this.prisma.$transaction(async tx=>{
+      const total=await tx.saasAuditoria.count({where});
+      const atual=Math.min(pagina,Math.max(1,Math.ceil(total/limite)));
+      const itens=await tx.saasAuditoria.findMany({where,orderBy,skip:(atual-1)*limite,take:limite,
+        select:{id:true,operadorId:true,metodo:true,rota:true,campos:true,recursoId:true,criadoEm:true}});
+      const porMetodo=await tx.saasAuditoria.groupBy({by:['metodo'],where,_count:{_all:true}});
+      const atores=await tx.saasAuditoria.groupBy({by:['operadorId'],where,_count:{_all:true}});
+      const ids=[...new Set(itens.map(e=>e.operadorId))];
+      const operadores=await tx.saasOperador.findMany({where:{id:{in:ids}},select:{id:true,nome:true,codigo:true}});
+      const nomes=new Map(operadores.map(o=>[o.id,o]));
+      return {itens:itens.map(e=>({...e,operador:nomes.get(e.operadorId)??null})),total,pagina:atual,limite,
+        resumo:{operadores:atores.length,porMetodo:Object.fromEntries(porMetodo.map(g=>[g.metodo,g._count._all]))}};
+    },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
   }
 
   async listarAuditoria() {
