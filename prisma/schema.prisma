@@ -402,6 +402,7 @@ model ConfigGlobal {
   telefone               String?
   endereco               String?
   mensagemComprovante     String?  @db.VarChar(240)
+  perfisImpressao         Json?
   obrigarCpfClienteVenda Boolean  @default(false)
   bloquearFiadoAtrasado  Boolean  @default(true)
   criadoEm               DateTime @default(now())

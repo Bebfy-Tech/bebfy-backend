@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfiguracaoDto, exigirEditor, podeEditarConfiguracao } from './configuracoes-regras';
 import { resolverModulos } from '../../common/modulos/plano-modulos';
+import { ImpressaoDto, perfisValidos } from './impressao-regras';
 const select={id:true,nomeFantasia:true,razaoSocial:true,cnpj:true,slug:true,subdominio:true,status:true,plano:{select:{nome:true,modulosPadrao:true}},modulosAtivos:{select:{modulo:true,ativo:true}},config:{select:{telefone:true,endereco:true,mensagemComprovante:true,obrigarCpfClienteVenda:true,atualizadoEm:true}}} as const;
 type Dados=Prisma.EmpresaGetPayload<{select:typeof select}>;
 function apresentar(e:Dados,cargo:string){
@@ -11,6 +12,23 @@ function apresentar(e:Dados,cargo:string){
 @Injectable()
 export class ConfiguracoesService{
  constructor(private readonly prisma:PrismaService){}
+ async impressao(empresaId:number){
+  const c=await this.prisma.configGlobal.findUnique({where:{empresaId},select:{perfisImpressao:true,atualizadoEm:true}});
+  return {perfis:perfisValidos(c?.perfisImpressao),revisao:c?.atualizadoEm.toISOString()??null};
+ }
+ async salvarImpressao(empresaId:number,usuarioId:string,dto:ImpressaoDto){
+  try{return await this.prisma.$transaction(async tx=>{
+   const u=await tx.usuario.findFirst({where:{id:usuarioId,ativo:true,primeiroAcesso:false,funcionario:{empresaId,ativo:true}},select:{funcionario:{select:{cargo:true}}}});
+   exigirEditor(u?.funcionario.cargo);
+   const e=await tx.empresa.findUnique({where:{id:empresaId},select:{nomeFantasia:true,cnpj:true,config:{select:{atualizadoEm:true}}}});
+   if(!e)throw new NotFoundException('Empresa não encontrada.');
+   if((e.config?.atualizadoEm.toISOString()??null)!==dto.revisao)throw new ConflictException('Configuração alterada em outro acesso. Atualize antes de salvar.');
+   const saved=await tx.configGlobal.upsert({where:{empresaId},create:{empresaId,nomeEmpresa:e.nomeFantasia,cnpj:e.cnpj,perfisImpressao:dto.perfis},update:{perfisImpressao:dto.perfis}});
+   await tx.logAuditoria.create({data:{empresaId,usuarioId,acao:'CONFIGURACOES_IMPRESSAO_EDITAR',entidade:'ConfigGlobal',entidadeId:String(empresaId),detalhes:JSON.stringify({campos:['perfisImpressao']})}});
+   return {perfis:perfisValidos(saved.perfisImpressao),revisao:saved.atualizadoEm.toISOString()};
+  },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable});}
+  catch(e){if(e instanceof Prisma.PrismaClientKnownRequestError&&['P2002','P2034'].includes(e.code))throw new ConflictException('Configuração modificada simultaneamente. Atualize a tela.');throw e;}
+ }
  async operacao(empresaId:number){const c=await this.prisma.configGlobal.findUnique({where:{empresaId},select:{obrigarCpfClienteVenda:true}});return {obrigarCpfClienteVenda:c?.obrigarCpfClienteVenda??false};}
  async consultar(empresaId:number,cargo:string){
   if(!['PROPRIETARIO','ADMINISTRADOR','GERENTE'].includes(cargo))throw new ForbiddenException('Configurações da empresa restritas a gestores.');
