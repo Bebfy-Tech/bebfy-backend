@@ -236,6 +236,15 @@ describe('HTTP contracts: React frontend / backend multi-tenant', () => {
       });
     expect(incorreta.status).toBe(400);
 
+    const semEmpresa=await request(app.getHttpServer())
+      .post('/auth/primeiro-acesso/alterar-senha')
+      .send({tokenTroca:inicial.body.tokenTroca,senhaAtual:credenciais.senha,novaSenha:'senha-nova-muito-forte',confirmarNovaSenha:'senha-nova-muito-forte'});
+    expect(semEmpresa.status).toBe(401);
+    const fraca=await request(app.getHttpServer())
+      .post('/auth/primeiro-acesso/alterar-senha').set('x-tenant',slug)
+      .send({tokenTroca:inicial.body.tokenTroca,senhaAtual:credenciais.senha,novaSenha:'123',confirmarNovaSenha:'123'});
+    expect(fraca.status).toBe(400);
+
     const troca = await request(app.getHttpServer())
       .post('/auth/primeiro-acesso/alterar-senha').set('x-tenant', slug)
       .send({

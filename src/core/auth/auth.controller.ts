@@ -53,12 +53,13 @@ export class AuthController {
   @Throttle({ strict: { limit: 5, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   @Post('primeiro-acesso/alterar-senha')
-  alterarSenhaInicial(@Body() dto: AlterarSenhaPrimeiroAcessoDto) {
-    return this.authService.alterarPrimeiraSenha(dto);
+  alterarSenhaInicial(@Body() dto: AlterarSenhaPrimeiroAcessoDto,@Request() req:any) {
+    return this.authService.alterarPrimeiraSenha(dto,req.empresa?.id);
   }
 
   @UseGuards(JwtAuthGuard, TenantGuard)
   @HttpCode(HttpStatus.OK)
+  @Throttle({strict:{limit:5,ttl:60000}})
   @Post('alterar-senha')
   alterarSenha(@Request() req: any, @Body() dto: AlterarSenhaDto) {
     return this.authService.alterarSenha(req.user.id, req.user.sessaoId, dto);

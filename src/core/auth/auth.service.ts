@@ -1,5 +1,5 @@
 import {
-  BadRequestException, ConflictException, Injectable, ServiceUnavailableException, UnauthorizedException,
+  BadRequestException, ConflictException, Injectable, Logger, ServiceUnavailableException, UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
@@ -15,6 +15,11 @@ import { ConfirmarRecuperacaoSenhaDto } from './dto/recuperar-senha.dto';
 
 @Injectable()
 export class AuthService {
+  private readonly logger=new Logger(AuthService.name);
+  private validarNovaSenha(senha:string){
+    if(typeof senha!=='string'||senha.length<12||!senha.trim()||Buffer.byteLength(senha,'utf8')>72)throw new BadRequestException('A nova senha deve ter ao menos 12 caracteres e no máximo 72 bytes.');
+  }
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
@@ -48,7 +53,7 @@ export class AuthService {
 
   private async usuarioPorLogin(login: string, empresaId: number) {
     const codigoNumero = Number(login);
-    const isNumero = /^\d+$/.test(login) && Number.isSafeInteger(codigoNumero);
+    const isNumero = /^\d+$/.test(login) && Number.isSafeInteger(codigoNumero) && codigoNumero<=2147483647 && codigoNumero>0;
     return this.prisma.usuario.findFirst({
       where: {
         ativo: true,
@@ -68,6 +73,7 @@ export class AuthService {
     if (!empresaId) {
       throw new UnauthorizedException('Identifique a empresa antes de efetuar login.');
     }
+    if(Buffer.byteLength(dto.senha,'utf8')>72)throw new UnauthorizedException('Código do funcionário ou senha incorretos.');
     const usuario = await this.usuarioPorLogin(dto.login, empresaId);
     if (!usuario || usuario.funcionario.empresaId !== empresaId ||
         !await bcrypt.compare(dto.senha, usuario.senha)) {
@@ -98,7 +104,7 @@ export class AuthService {
 
     const novaSessao = randomUUID();
     const result = await this.prisma.usuario.updateMany({
-      where: { id: usuario.id, ativo: true, sessaoId: usuario.sessaoId },
+      where: { id: usuario.id, ativo: true, sessaoId: usuario.sessaoId, senha:usuario.senha, primeiroAcesso:false },
       data: { sessaoId: novaSessao, ultimaAtividadeEm: new Date() },
     });
     if (result.count !== 1) {
@@ -160,13 +166,16 @@ export class AuthService {
       if(!response.ok)throw new Error('Email provider returned an error');
     }catch{
       await this.prisma.resetSenhaToken.deleteMany({where:{tokenHash}});
-      throw new ServiceUnavailableException('Falha no envio do e-mail de recuperação. Tente novamente depois.');
+      // Do not reveal account existence when the mail provider fails.
+      this.logger.warn('Falha no envio de recuperação de acesso.');
+      return generic;
     }
     return generic;
   }
 
   async confirmarRecuperacaoSenha(dto: ConfirmarRecuperacaoSenhaDto, empresaId?:number) {
     if(!empresaId)throw new UnauthorizedException('Distribuidora não identificada.');
+    this.validarNovaSenha(dto.novaSenha);
     if(dto.novaSenha!==dto.confirmarNovaSenha)throw new BadRequestException('Confirmação da senha não corresponde.');
     const hash=createHash('sha256').update(dto.token).digest('hex');
     const token=await this.prisma.resetSenhaToken.findUnique({where:{tokenHash:hash}});
@@ -178,22 +187,25 @@ export class AuthService {
     });
     if(!user?.ativo || !user.funcionario.ativo || user.funcionario.empresaId!==empresaId)
       throw new UnauthorizedException('Acesso inválido ou desativado.');
+    const novaHash=await bcrypt.hash(dto.novaSenha,12);
     await this.prisma.$transaction(async tx=>{
       const used=await tx.resetSenhaToken.updateMany({
         where:{id:token.id,usadoEm:null,expiraEm:{gt:new Date()}},
         data:{usadoEm:new Date()},
       });
       if(used.count!==1)throw new UnauthorizedException('Link já utilizado.');
-      await tx.usuario.update({
-        where:{id:user.id},
-        data:{senha:await bcrypt.hash(dto.novaSenha,12),primeiroAcesso:false,
-          sessaoId:null,ultimaAtividadeEm:null},
+      const updated=await tx.usuario.updateMany({
+        where:{id:user.id,ativo:true,senha:user.senha,funcionario:{ativo:true,empresaId}},
+        data:{senha:novaHash,primeiroAcesso:false,sessaoId:null,ultimaAtividadeEm:null},
       });
+      if(updated.count!==1)throw new UnauthorizedException('Acesso alterado. Solicite outro link.');
+      await tx.resetSenhaToken.deleteMany({where:{usuarioId:user.id,usadoEm:null}});
     });
     return {alterada:true,mensagem:'Senha alterada. Entre novamente com a nova senha.'};
   }
 
-  async alterarPrimeiraSenha(dto: AlterarSenhaPrimeiroAcessoDto) {
+  async alterarPrimeiraSenha(dto: AlterarSenhaPrimeiroAcessoDto,empresaId?:number) {
+    this.validarNovaSenha(dto.novaSenha);
     if (dto.novaSenha !== dto.confirmarNovaSenha) {
       throw new BadRequestException('A confirmação da nova senha não corresponde.');
     }
@@ -206,7 +218,7 @@ export class AuthService {
     } catch {
       throw new UnauthorizedException('Link de troca expirado. Entre novamente.');
     }
-    if (payload.proposito !== 'PRIMEIRO_ACESSO' || !payload.sub || !payload.empresaId) {
+    if (payload.proposito !== 'PRIMEIRO_ACESSO' || !payload.sub || !empresaId || payload.empresaId!==empresaId) {
       throw new UnauthorizedException('Autorização de primeiro acesso inválida.');
     }
     const usuario = await this.prisma.usuario.findUnique({
@@ -216,15 +228,17 @@ export class AuthService {
     if (!usuario || !usuario.ativo || !usuario.funcionario.ativo ||
         usuario.funcionario.empresaId !== payload.empresaId || !usuario.primeiroAcesso ||
         !['ATIVA', 'EM_TESTE'].includes(usuario.funcionario.empresa.status) ||
-        !await bcrypt.compare(dto.senhaAtual, usuario.senha)) {
+        (usuario.funcionario.empresa.inadimplente&&(!usuario.funcionario.empresa.liberacaoFinanceiraAte||usuario.funcionario.empresa.liberacaoFinanceiraAte.getTime()<=Date.now())) ||
+        Buffer.byteLength(dto.senhaAtual,'utf8')>72 || !await bcrypt.compare(dto.senhaAtual, usuario.senha)) {
       throw new UnauthorizedException('Credenciais de primeiro acesso inválidas.');
     }
 
     const hash = await bcrypt.hash(dto.novaSenha, 12);
     const sessaoId = randomUUID();
-    const result = await this.prisma.usuario.updateMany({
-      where: { id: usuario.id, ativo: true, primeiroAcesso: true, senha: usuario.senha },
-      data: { senha: hash, primeiroAcesso: false, sessaoId, ultimaAtividadeEm: new Date() },
+    const result=await this.prisma.$transaction(async tx=>{
+      const changed=await tx.usuario.updateMany({where:{id:usuario.id,ativo:true,primeiroAcesso:true,senha:usuario.senha,funcionario:{ativo:true,empresaId}},data:{senha:hash,primeiroAcesso:false,sessaoId,ultimaAtividadeEm:new Date()}});
+      if(changed.count===1)await tx.resetSenhaToken.deleteMany({where:{usuarioId:usuario.id,usadoEm:null}});
+      return changed;
     });
     if (result.count !== 1) {
       throw new ConflictException('Senha já alterada em outra solicitação. Entre novamente.');
@@ -233,6 +247,7 @@ export class AuthService {
   }
 
   async alterarSenha(usuarioId: string, sessaoId: string, dto: AlterarSenhaDto) {
+    this.validarNovaSenha(dto.novaSenha);
     if (dto.novaSenha !== dto.confirmarNovaSenha) {
       throw new BadRequestException('A confirmação da nova senha não corresponde.');
     }
@@ -242,13 +257,13 @@ export class AuthService {
     const usuario = await this.prisma.usuario.findUnique({
       where: { id: usuarioId }, select: { senha: true, ativo: true, sessaoId: true },
     });
-    if (!usuario?.ativo || usuario.sessaoId !== sessaoId ||
-        !await bcrypt.compare(dto.senhaAtual, usuario.senha)) {
-      throw new UnauthorizedException('Senha atual ou sessão inválida.');
-    }
-    const result = await this.prisma.usuario.updateMany({
-      where: { id: usuarioId, sessaoId, senha: usuario.senha },
-      data: { senha: await bcrypt.hash(dto.novaSenha, 12), sessaoId: randomUUID(), ultimaAtividadeEm: null },
+    if(!usuario?.ativo||usuario.sessaoId!==sessaoId)throw new UnauthorizedException('Sessão inválida.');
+    if(Buffer.byteLength(dto.senhaAtual,'utf8')>72||!await bcrypt.compare(dto.senhaAtual,usuario.senha))throw new BadRequestException('Senha atual incorreta.');
+    const hash=await bcrypt.hash(dto.novaSenha,12);
+    const result=await this.prisma.$transaction(async tx=>{
+      const changed=await tx.usuario.updateMany({where:{id:usuarioId,ativo:true,sessaoId,senha:usuario.senha},data:{senha:hash,sessaoId:null,ultimaAtividadeEm:null}});
+      if(changed.count===1)await tx.resetSenhaToken.deleteMany({where:{usuarioId,usadoEm:null}});
+      return changed;
     });
     if (!result.count) throw new ConflictException('Senha ou sessão alterada em outro acesso.');
     return { alterada: true, mensagem: 'Senha alterada. Faça login novamente.' };
