@@ -14,6 +14,7 @@ class LoginSaasDto {
 class CriarOperadorDto {
   @Type(() => Number) @IsInt() @Min(1) codigo: number;
   @IsString() @MinLength(2) @MaxLength(120) nome: string;
+  @IsOptional() @IsEmail() @MaxLength(254) email?:string;
   @IsString() @IsNotEmpty() senha: string;
   @IsEnum(SaasCargo) cargo: SaasCargo;
   @IsArray() @IsString({each: true}) permissoes: string[];
@@ -55,6 +56,7 @@ export class SaasAuthController {
 export class SaasStaffController {
   constructor(private readonly service: SaasAuthService) {}
   @Get() listar() { return this.service.listar(); }
-  @Post() criar(@Body() dto: CriarOperadorDto) { return this.service.criar(dto); }
+  @Post() criar(@Req() req:any,@Body() dto: CriarOperadorDto) { return this.service.criar(dto,req.saasUser.id); }
+  @Post(':id/encerrar-sessao') @HttpCode(200) encerrar(@Param('id') id:string,@Req() req:any){return this.service.encerrarSessao(id,req.saasUser.id);}
   @Patch(':id') editar(@Param('id') id: string, @Req() req: any, @Body() dto: EditarOperadorDto) { return this.service.atualizar(id, dto, req.saasUser.id); }
 }
